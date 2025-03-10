@@ -1,0 +1,10 @@
+# Ignore everything
+*
+
+# But not these files...
+!.gitkeep
+!.gitignore
+!*.md
+!*.txt
+!*.svg
+!TemplateImages
