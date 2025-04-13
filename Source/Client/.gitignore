@@ -1,0 +1,18 @@
+# Gradle
+.gradle/
+build/
+**/build/
+
+# Eclipse
+.project
+.classpath
+.settings/
+**/.settings/
+**/.classpath
+**/.project
+
+# macOS
+.DS_Store
+
+# Java
+bin/
