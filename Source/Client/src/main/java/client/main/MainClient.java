@@ -8,12 +8,17 @@ import org.springframework.web.reactive.function.BodyInserters;
 import org.springframework.web.reactive.function.client.WebClient;
 
 import client.gamedata.EGameState;
+import client.map.HalfMap;
+import client.map.HalfMapGenerator;
+import client.map.HalfMapValidator;
 import client.networking.ClientCommunicator;
 import messagesbase.UniquePlayerIdentifier;
 import messagesbase.messagesfromclient.PlayerRegistration;
 import messagesbase.ResponseEnvelope;
 import messagesbase.messagesfromclient.ERequestState;
+import messagesbase.messagesfromserver.EPlayerGameState;
 import messagesbase.messagesfromserver.GameState;
+import messagesbase.messagesfromserver.PlayerState;
 import reactor.core.publisher.Mono;
 
 public class MainClient {
@@ -33,7 +38,7 @@ public class MainClient {
 	 * documentation is given in Moodle, which describes which messages must be used
 	 * when and how.
 	 */
-	public static void main(String[] args) {
+	public static void main(String[] args) throws InterruptedException {
 		
 	    String serverUrl = args[1];
 	    String gameId = args[2];
@@ -50,8 +55,54 @@ public class MainClient {
 
 	    System.out.println("Player registered successfully: " + playerId.getUniquePlayerID());
 	    
-	    EGameState currentState = communicator.requestGameState();
-	    System.out.println("Current game state (for me): " + currentState);
+        while (true) {
+            GameState gameState = communicator.requestFullGameState();
+
+            if (gameState.getPlayers().size() < 2) {
+                System.out.println("Waiting for the second player to register...");
+                Thread.sleep(1000);
+                continue;
+            }
+
+            PlayerState self = gameState.getPlayers().stream()
+                    .filter(p -> p.getUniquePlayerID().equals(playerId.getUniquePlayerID()))
+                    .findFirst()
+                    .orElseThrow(() -> new RuntimeException("Could not find this player in GameState."));
+
+            EGameState currentState = EGameState.fromNetwork(self.getState());
+            System.out.println("Current game state (for me): " + currentState);
+
+            if (currentState == EGameState.MUST_ACT) {
+                break;
+            }
+
+            if (currentState == EGameState.WON || currentState == EGameState.LOST) {
+                System.out.println("Game already ended. Exiting.");
+                return;
+            }
+
+            Thread.sleep(1000);
+        }
+
+        // Generate and validate map
+        HalfMap validMap = null;
+
+        for (int i = 0; i < 100; i++) {
+        	HalfMap map = HalfMapGenerator.generateRandomMap();
+            if (HalfMapValidator.validateHalfMap(map)) {
+                validMap = map;
+                System.out.println("Found valid map after " + (i + 1) + " attempts.");
+                break;
+            } else {
+                System.out.println("Attempt " + (i + 1) + ": Invalid map");
+            }
+        }
+
+        if (validMap != null) {
+            communicator.sendHalfMap(validMap);
+        } else {
+            System.err.println("Could not generate a valid map after 100 attempts.");
+        }
 
 	    // You can now use the playerId for further interactions with the server.
 	    

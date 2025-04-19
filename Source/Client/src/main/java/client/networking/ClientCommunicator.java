@@ -8,9 +8,13 @@ import org.springframework.web.reactive.function.BodyInserters;
 import org.springframework.web.reactive.function.client.WebClient;
 
 import client.gamedata.EGameState;
+import client.map.HalfMap;
+import client.map.HalfMapValidator;
+import client.networking.converter.MapConverter;
 import messagesbase.ResponseEnvelope;
 import messagesbase.UniquePlayerIdentifier;
 import messagesbase.messagesfromclient.ERequestState;
+import messagesbase.messagesfromclient.PlayerHalfMap;
 import messagesbase.messagesfromclient.PlayerRegistration;
 import messagesbase.messagesfromserver.GameState;
 import messagesbase.messagesfromserver.PlayerState;
@@ -61,10 +65,32 @@ public class ClientCommunicator {
 	    return response.getData().get();
 	}
 	
-	//public void sendHalfMap(HalfMap halfMap) {
-	    // TODO: Convert your HalfMap into PlayerHalfMap using your converter
-	    // TODO: POST it to /{gameId}/halfmaps/{playerId}
-	//}
+	public void sendHalfMap(HalfMap halfMap) {
+	    if (playerID == null) {
+	        throw new IllegalStateException("Player must be registered before sending half map.");
+	    }
+
+	    if (!HalfMapValidator.validateHalfMap(halfMap)) {
+	        throw new IllegalArgumentException("❌ HalfMap validation failed. Map will not be sent to the server.");
+	    }
+
+	    PlayerHalfMap networkMap = MapConverter.convertToNetworkMap(halfMap, new UniquePlayerIdentifier(playerID));
+
+	    Mono<ResponseEnvelope<Void>> responseMono = baseWebClient
+	            .method(HttpMethod.POST)
+	            .uri("/" + gameID + "/halfmaps")
+	            .body(BodyInserters.fromValue(networkMap))
+	            .retrieve()
+	            .bodyToMono(new ParameterizedTypeReference<ResponseEnvelope<Void>>() {});
+
+	    ResponseEnvelope<Void> response = responseMono.block();
+
+	    if (response.getState() == ERequestState.Error) {
+	        throw new RuntimeException("🚨 HalfMap sending failed: " + response.getExceptionMessage());
+	    }
+
+	    System.out.println("✅ HalfMap sent successfully!");
+	}
 
 	//public void sendMove(EMove move) {
 	    // TODO: Send a move (e.g. UP, DOWN) to /{gameId}/moves/{playerId}
@@ -99,6 +125,24 @@ public class ClientCommunicator {
 	    }
 	    throw new RuntimeException("Could not find own player in game state.");
 	}
+	
+	public GameState requestFullGameState() {
+	    Mono<ResponseEnvelope<GameState>> webAccess = baseWebClient
+	            .method(HttpMethod.GET)
+	            .uri("/" + gameID + "/states/" + playerID)
+	            .retrieve()
+	            .bodyToMono(new ParameterizedTypeReference<ResponseEnvelope<GameState>>() {});
+
+	    ResponseEnvelope<GameState> response = webAccess.block();
+
+	    if (response.getState() == ERequestState.Error) {
+	        throw new RuntimeException("Failed to retrieve full game state: " + response.getExceptionMessage());
+	    }
+
+	    return response.getData().orElseThrow(() ->
+	            new RuntimeException("GameState data missing in server response."));
+	}
+
 
 
 	//public FullMap receiveFullMap() {
