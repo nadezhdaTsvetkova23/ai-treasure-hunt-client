@@ -28,4 +28,14 @@ public class Field {
     public boolean isTreasurePresent() {
         return treasurePresent;
     }
+    
+    @Override
+    public String toString() {
+        StringBuilder sb = new StringBuilder();
+        sb.append(terrainType);
+        if (fortPresent) sb.append(" [Fort]");
+        if (treasurePresent) sb.append(" [Treasure]");
+        return sb.toString();
+    }
+
 }

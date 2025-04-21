@@ -1,0 +1,66 @@
+package client.map;
+
+import java.util.HashMap;
+import java.util.Map;
+
+public class ClientFullMap {
+
+    private final HalfMap myPlayerHalfMap;
+    private final HalfMap enemyPlayerHalfMap;
+    private final int width;
+    private final int height;
+
+    public ClientFullMap(HalfMap myPlayerHalfMap, HalfMap enemyPlayerHalfMap, int width, int height) {
+        this.myPlayerHalfMap = myPlayerHalfMap;
+        this.enemyPlayerHalfMap = enemyPlayerHalfMap;
+        this.width = width;
+        this.height = height;
+    }
+
+    public HalfMap getMyPlayerHalfMap() {
+        return myPlayerHalfMap;
+    }
+
+    public HalfMap getEnemyPlayerHalfMap() {
+        return enemyPlayerHalfMap;
+    }
+
+    public int getWidth() {
+        return width;
+    }
+
+    public int getHeight() {
+        return height;
+    }
+
+    public Map<Coordinate, Field> getAllFields() {
+        Map<Coordinate, Field> combined = new HashMap<>();
+        combined.putAll(myPlayerHalfMap.getFields());
+        combined.putAll(enemyPlayerHalfMap.getFields());
+        return combined;
+    }
+
+    public Field getFieldAt(Coordinate coordinate) {
+        return getAllFields().get(coordinate);
+    }
+
+    public boolean isComplete() {
+        return getAllFields().size() == width * height;
+    }
+    
+    @Override
+    public String toString() {
+        StringBuilder sb = new StringBuilder();
+        sb.append("ClientFullMap ").append(width).append("x").append(height).append("\n");
+        sb.append("--- My HalfMap ---\n");
+        myPlayerHalfMap.getFields().forEach((coord, field) ->
+            sb.append(coord).append(" → ").append(field).append("\n")
+        );
+        sb.append("--- Enemy HalfMap ---\n");
+        enemyPlayerHalfMap.getFields().forEach((coord, field) ->
+            sb.append(coord).append(" → ").append(field).append("\n")
+        );
+        return sb.toString();
+    }
+
+}

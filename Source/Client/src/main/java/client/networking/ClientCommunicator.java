@@ -8,6 +8,7 @@ import org.springframework.web.reactive.function.BodyInserters;
 import org.springframework.web.reactive.function.client.WebClient;
 
 import client.gamedata.EGameState;
+import client.map.ClientFullMap;
 import client.map.HalfMap;
 import client.map.HalfMapValidator;
 import client.networking.converter.MapConverter;
@@ -16,6 +17,7 @@ import messagesbase.UniquePlayerIdentifier;
 import messagesbase.messagesfromclient.ERequestState;
 import messagesbase.messagesfromclient.PlayerHalfMap;
 import messagesbase.messagesfromclient.PlayerRegistration;
+import messagesbase.messagesfromserver.FullMap;
 import messagesbase.messagesfromserver.GameState;
 import messagesbase.messagesfromserver.PlayerState;
 import reactor.core.publisher.Mono;
@@ -86,7 +88,7 @@ public class ClientCommunicator {
 	    ResponseEnvelope<Void> response = responseMono.block();
 
 	    if (response.getState() == ERequestState.Error) {
-	        throw new RuntimeException("🚨 HalfMap sending failed: " + response.getExceptionMessage());
+	        throw new RuntimeException("❌ HalfMap sending failed: " + response.getExceptionMessage());
 	    }
 
 	    System.out.println("✅ HalfMap sent successfully!");
@@ -142,13 +144,10 @@ public class ClientCommunicator {
 	    return response.getData().orElseThrow(() ->
 	            new RuntimeException("GameState data missing in server response."));
 	}
-
-
-
-	//public FullMap receiveFullMap() {
-	    // TODO: GET the full map and convert it to your own data structure
-	//    return null;
-	//}
-
+	
+	public ClientFullMap receiveFullMap() {
+	    GameState gameState = requestFullGameState(); // this uses /states/{playerId}
+	    return MapConverter.convertToInternalMap(gameState.getMap(), new UniquePlayerIdentifier(playerID));
+	}
 
 }

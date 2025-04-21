@@ -8,10 +8,13 @@ import org.springframework.web.reactive.function.BodyInserters;
 import org.springframework.web.reactive.function.client.WebClient;
 
 import client.gamedata.EGameState;
+import client.map.ClientFullMap;
+import client.map.Coordinate;
 import client.map.HalfMap;
 import client.map.HalfMapGenerator;
 import client.map.HalfMapValidator;
 import client.networking.ClientCommunicator;
+import client.ui.Visualisator;
 import messagesbase.UniquePlayerIdentifier;
 import messagesbase.messagesfromclient.PlayerRegistration;
 import messagesbase.ResponseEnvelope;
@@ -102,6 +105,20 @@ public class MainClient {
             communicator.sendHalfMap(validMap);
         } else {
             System.err.println("Could not generate a valid map after 100 attempts.");
+        }
+        
+        Thread.sleep(1500); // short pause to allow map exchange
+
+        try {
+            ClientFullMap fullMap = communicator.receiveFullMap();
+            System.out.println("Full map received:");
+
+            Visualisator visual = new Visualisator();
+            // For now, use null as player/enemy pos — update later during movement
+            visual.displayFullMap(fullMap, new Coordinate(-1, -1), new Coordinate(-1, -1));
+
+        } catch (Exception e) {
+            System.err.println("Failed to receive or print full map: " + e.getMessage());
         }
 
 	    // You can now use the playerId for further interactions with the server.
