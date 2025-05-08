@@ -16,7 +16,7 @@ public class Visualisator {
 
         System.out.println("\nMap (" + width + "x" + height + "):");
 
-        // Header row
+        // header row
         System.out.print("    ");
         for (int x = 0; x < width; x++) {
             System.out.printf("%4d", x);
@@ -59,7 +59,9 @@ public class Visualisator {
     }
 
     public void displayDiscoveredFields(Map<Coordinate, Field> discoveredFields) {
-        System.out.println("Discovered fields:");
+        System.out.print("Discovered fields: " + discoveredFields.size() + " fields: ");
+        StringBuilder output = new StringBuilder();
+
         for (Map.Entry<Coordinate, Field> entry : discoveredFields.entrySet()) {
             Coordinate coord = entry.getKey();
             Field field = entry.getValue();
@@ -73,7 +75,37 @@ public class Visualisator {
             if (field.isFortPresent()) extra += ", Castle";
             if (field.isTreasurePresent()) extra += ", Treasure";
 
-            System.out.printf("(%d,%d) = %s%s%n", coord.getX(), coord.getY(), symbol, extra);
+            output.append(String.format("(%d,%d) = %s%s, ", coord.getX(), coord.getY(), symbol, extra));
         }
+
+        // remove the trailing comma and space
+        if (output.length() > 0) {
+            output.setLength(output.length() - 2);
+        }
+
+        System.out.println(output);
+    }
+    
+    public void displayUndiscoveredFields(Map<Coordinate, Field> undiscoveredFields) {
+        System.out.print("Undiscovered fields: " + undiscoveredFields.size() + " fields: ");
+        StringBuilder output = new StringBuilder();
+
+        for (Map.Entry<Coordinate, Field> entry : undiscoveredFields.entrySet()) {
+            Coordinate coord = entry.getKey();
+            Field field = entry.getValue();
+            String symbol = switch (field.getTerrainType()) {
+                case GRASS -> "Grass";
+                case MOUNTAIN -> "Mountain";
+                case WATER -> "Water";
+            };
+
+            output.append(String.format("(%d,%d) = %s, ", coord.getX(), coord.getY(), symbol));
+        }
+
+        if (output.length() > 0) {
+            output.setLength(output.length() - 2);
+        }
+
+        System.out.println(output);
     }
 }

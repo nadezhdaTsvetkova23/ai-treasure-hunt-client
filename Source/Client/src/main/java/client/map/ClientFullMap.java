@@ -2,6 +2,9 @@ package client.map;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
+
+import messagesbase.messagesfromserver.EPlayerPositionState;
 
 public class ClientFullMap {
 
@@ -20,7 +23,15 @@ public class ClientFullMap {
     public HalfMap getMyPlayerHalfMap() {
         return myPlayerHalfMap;
     }
+    
+    public Map<Coordinate, Field> getMyFields() {
+        return myPlayerHalfMap.getFields();
+    }
 
+	public Map<Coordinate, Field> getEnemyFields() {
+		return enemyPlayerHalfMap.getFields();
+	}
+	
     public HalfMap getEnemyPlayerHalfMap() {
         return enemyPlayerHalfMap;
     }
@@ -46,6 +57,19 @@ public class ClientFullMap {
 
     public boolean isComplete() {
         return getAllFields().size() == width * height;
+    }
+    
+    public Optional<Coordinate> findMyPlayerPosition() {
+        for (Map.Entry<Coordinate, Field> entry : getAllFields().entrySet()) {
+            if (entry.getValue().getPlayerPresence() == EPlayerPresence.MY_PLAYER) {
+                return Optional.of(entry.getKey());
+            }
+        }
+        return Optional.empty();
+    }
+    
+    public boolean isValidHalfMapSize() {
+        return myPlayerHalfMap.getFields().size() == 50 && enemyPlayerHalfMap.getFields().size() == 50;
     }
     
     @Override

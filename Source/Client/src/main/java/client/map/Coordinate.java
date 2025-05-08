@@ -1,5 +1,7 @@
 package client.map;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Objects;
 
 public class Coordinate {
@@ -13,18 +15,29 @@ public class Coordinate {
 
     public int getX() { return xCord; }
     public int getY() { return yCord; }
+    
+    public List<Coordinate> getAdjacentCoordinates() {
+        List<Coordinate> neighbors = new ArrayList<>();
+        neighbors.add(new Coordinate(xCord - 1, yCord));
+        neighbors.add(new Coordinate(xCord + 1, yCord));
+        neighbors.add(new Coordinate(xCord, yCord - 1));
+        neighbors.add(new Coordinate(xCord, yCord + 1));
+        return neighbors;
+    }
 
     @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (!(o instanceof Coordinate that)) return false;
-        return xCord == that.xCord && yCord == that.yCord;
+    public boolean equals(Object obj) {
+        if (this == obj) return true;
+        if (obj == null || getClass() != obj.getClass()) return false;
+        Coordinate other = (Coordinate) obj;
+        return xCord == other.xCord && yCord == other.yCord;
     }
 
     @Override
     public int hashCode() {
         return Objects.hash(xCord, yCord);
     }
+
     
     @Override
     public String toString() {
