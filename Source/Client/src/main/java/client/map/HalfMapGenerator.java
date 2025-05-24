@@ -13,88 +13,107 @@ public class HalfMapGenerator {
         while (true) {
             Map<Coordinate, Field> fields = new HashMap<>();
             List<Coordinate> allCoordinates = generateCoordinates();
-
             Collections.shuffle(allCoordinates, new Random());
 
-            int mountainCount = 5;
-            int waterCount = 7;
-            int grassCount = TOTAL_FIELDS - mountainCount - waterCount;
+            assignTerrains(fields, allCoordinates);
 
-            Iterator<Coordinate> iterator = allCoordinates.iterator();
+            List<Coordinate> grassCoords = getGrassCoordinates(fields);
+            if (grassCoords.size() < FORT_CANDIDATES) continue;
 
-            // place Mountains
-            for (int i = 0; i < mountainCount && iterator.hasNext(); i++) {
-                Coordinate c = iterator.next();
-                fields.put(c, new Field(c, EGameTerrain.MOUNTAIN,
-                        EFortPresence.NO_FORT, ETreasurePresence.NO_TREASURE,
-                        EPlayerPresence.NO_PLAYER, false));
-            }
+            Set<Coordinate> fortCandidates = pickFortCandidates(grassCoords);
+            markFortCandidates(fields, fortCandidates);
 
-            // place Water
-            for (int i = 0; i < waterCount && iterator.hasNext(); i++) {
-                Coordinate c = iterator.next();
-                fields.put(c, new Field(c, EGameTerrain.WATER,
-                        EFortPresence.NO_FORT, ETreasurePresence.NO_TREASURE,
-                        EPlayerPresence.NO_PLAYER, false));
-            }
+            placeTreasure(fields, grassCoords);
 
-            // place Grass
-            List<Coordinate> grassCoords = new ArrayList<>();
-            for (int i = 0; i < grassCount && iterator.hasNext(); i++) {
-                Coordinate c = iterator.next();
-                fields.put(c, new Field(c, EGameTerrain.GRASS,
-                        EFortPresence.NO_FORT, ETreasurePresence.NO_TREASURE,
-                        EPlayerPresence.NO_PLAYER, false));
-                grassCoords.add(c);
-            }
-
-            // Select FORT_CANDIDATES grass fields for fort candidates
-            if (grassCoords.size() < FORT_CANDIDATES) continue; // impossible but safe
-
-            Collections.shuffle(grassCoords, new Random());
-            Set<Coordinate> fortCandidates = new HashSet<>(grassCoords.subList(0, FORT_CANDIDATES));
-
-            for (Coordinate c : fortCandidates) {
-                Field old = fields.get(c);
-                fields.put(c, new Field(c, EGameTerrain.GRASS,
-                        EFortPresence.NO_FORT, ETreasurePresence.NO_TREASURE,
-                        EPlayerPresence.NO_PLAYER, true));
-            }
-
-            // Treasure placement: pick a random grass field (not required by change, but required for game)
-            Collections.shuffle(grassCoords, new Random());
-            Coordinate treasureCoord = grassCoords.get(0);
-            Field treasureField = fields.get(treasureCoord);
-            fields.put(treasureCoord, new Field(treasureCoord, treasureField.getTerrainType(),
-                    treasureField.getFortPresence(), ETreasurePresence.TREASURE_PRESENT,
-                    treasureField.getPlayerPresence(), treasureField.isFortCandidate()));
-
-            // You might still need to check for other validation criteria, e.g. islands, edge water
             HalfMap candidateMap = new HalfMap(fields);
-
-            if (hasTooMuchWaterOnEdges(candidateMap)) {
-                continue;
-            }
+            if (hasTooMuchWaterOnEdges(candidateMap)) continue;
 
             return candidateMap;
         }
     }
 
+    private static void assignTerrains(Map<Coordinate, Field> fields, List<Coordinate> coordinates) {
+        int mountainCount = 5;
+        int waterCount = 7;
+        int grassCount = TOTAL_FIELDS - mountainCount - waterCount;
+
+        Iterator<Coordinate> iterator = coordinates.iterator();
+
+        for (int i = 0; i < mountainCount && iterator.hasNext(); i++) {
+            Coordinate c = iterator.next();
+            fields.put(c, createField(c, EGameTerrain.MOUNTAIN, false));
+        }
+
+        for (int i = 0; i < waterCount && iterator.hasNext(); i++) {
+            Coordinate c = iterator.next();
+            fields.put(c, createField(c, EGameTerrain.WATER, false));
+        }
+
+        for (int i = 0; i < grassCount && iterator.hasNext(); i++) {
+            Coordinate c = iterator.next();
+            fields.put(c, createField(c, EGameTerrain.GRASS, false));
+        }
+    }
+
+    private static Field createField(Coordinate c, EGameTerrain terrain, boolean isFortCandidate) {
+        return new Field(c, terrain,
+                EFortPresence.NO_FORT,
+                ETreasurePresence.NO_TREASURE,
+                EPlayerPresence.NO_PLAYER,
+                isFortCandidate);
+    }
+
+    private static List<Coordinate> getGrassCoordinates(Map<Coordinate, Field> fields) {
+        List<Coordinate> grassCoords = new ArrayList<>();
+        for (Map.Entry<Coordinate, Field> entry : fields.entrySet()) {
+            if (entry.getValue().getTerrainType() == EGameTerrain.GRASS) {
+                grassCoords.add(entry.getKey());
+            }
+        }
+        return grassCoords;
+    }
+
+    private static Set<Coordinate> pickFortCandidates(List<Coordinate> grassCoords) {
+        Collections.shuffle(grassCoords, new Random());
+        return new HashSet<>(grassCoords.subList(0, FORT_CANDIDATES));
+    }
+
+    private static void markFortCandidates(Map<Coordinate, Field> fields, Set<Coordinate> fortCandidates) {
+        for (Coordinate c : fortCandidates) {
+            Field old = fields.get(c);
+            fields.put(c, new Field(c, old.getTerrainType(),
+                    EFortPresence.NO_FORT,
+                    ETreasurePresence.NO_TREASURE,
+                    EPlayerPresence.NO_PLAYER,
+                    true));
+        }
+    }
+
+    private static void placeTreasure(Map<Coordinate, Field> fields, List<Coordinate> grassCoords) {
+        Collections.shuffle(grassCoords, new Random());
+        Coordinate treasureCoord = grassCoords.get(0);
+        Field old = fields.get(treasureCoord);
+        fields.put(treasureCoord, new Field(
+                treasureCoord,
+                old.getTerrainType(),
+                old.getFortPresence(),
+                ETreasurePresence.TREASURE_PRESENT,
+                old.getPlayerPresence(),
+                old.isFortCandidate()
+        ));
+    }
+
     private static boolean hasTooMuchWaterOnEdges(HalfMap map) {
         int top = 0, bottom = 0, left = 0, right = 0;
-
         for (Map.Entry<Coordinate, Field> entry : map.getFields().entrySet()) {
             Coordinate c = entry.getKey();
             Field f = entry.getValue();
-
             if (f.getTerrainType() != EGameTerrain.WATER) continue;
-
             if (c.getY() == 0) top++;
             if (c.getY() == HEIGHT - 1) bottom++;
             if (c.getX() == 0) left++;
             if (c.getX() == WIDTH - 1) right++;
         }
-
         return top > 2 || bottom > 2 || left > 2 || right > 2;
     }
 
