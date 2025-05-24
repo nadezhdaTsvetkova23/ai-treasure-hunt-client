@@ -6,14 +6,16 @@ public class Field {
     private final EFortPresence fortPresence;
     private final ETreasurePresence treasurePresence;
     private final EPlayerPresence playerPresence;
+    private final boolean isFortCandidate;
 
     public Field(Coordinate coordinate, EGameTerrain terrainType,
-                 EFortPresence fortPresence, ETreasurePresence treasurePresence, EPlayerPresence playerPresence) {
+                 EFortPresence fortPresence, ETreasurePresence treasurePresence, EPlayerPresence playerPresence, boolean isFortCandidate) {
         this.coordinate = coordinate;
         this.terrainType = terrainType;
         this.fortPresence = fortPresence;
         this.treasurePresence = treasurePresence;
         this.playerPresence = playerPresence;
+        this.isFortCandidate = isFortCandidate;
     }
 
     public Coordinate getCoordinate() {
@@ -50,6 +52,10 @@ public class Field {
 
     public boolean isEnemyPlayerHere() {
         return playerPresence == EPlayerPresence.ENEMY_PLAYER;
+    }
+    
+    public boolean isFortCandidate() {
+        return isFortCandidate;
     }
 
     @Override

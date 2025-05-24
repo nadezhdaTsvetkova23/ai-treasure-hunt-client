@@ -32,7 +32,7 @@ public class MapConverter {
             nodes.add(new PlayerHalfMapNode(
                     coord.getX(),
                     coord.getY(),
-                    field.getFortPresence() == EFortPresence.MY_FORT,
+                    field.isFortCandidate(),
                     mapToNetworkTerrain(field.getTerrainType())
             ));
         }
@@ -88,7 +88,7 @@ public class MapConverter {
             ETreasurePresence treasure = ETreasurePresence.fromServerTreasureState(node.getTreasureState());
             EPlayerPresence presence = EPlayerPresence.fromServerPlayerPosition(node.getPlayerPositionState());
 
-            Field field = new Field(coord, terrain, fort, treasure, presence);
+            Field field = new Field(coord, terrain, fort, treasure, presence, false);
 
             if (isVerticalLayout) {
                 // Horizontal layout - split by X axis
@@ -119,7 +119,8 @@ public class MapConverter {
             oldField.getTerrainType(),
             oldField.getFortPresence(),
             oldField.getTreasurePresence(),
-            newPresence
+            newPresence,
+            false // isFortCandidate remains unchanged, we don't need it anymore after sending the initial half map
         );
     }
 

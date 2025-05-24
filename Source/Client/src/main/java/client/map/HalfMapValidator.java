@@ -6,14 +6,13 @@ public class HalfMapValidator {
 
     public static boolean validateHalfMap(HalfMap halfMap) {
         return checkTerrainTypeRequirements(halfMap)
-                && checkCastleRequirements(halfMap)
+                && checkFortCandidateRequirements(halfMap)
                 && checkMapEdges(halfMap)
                 && !checkIfIslandsPresent(halfMap);
     }
 
     static boolean checkTerrainTypeRequirements(HalfMap halfMap) {
         int grass = 0, water = 0, mountain = 0;
-
         for (Field field : halfMap.getFields().values()) {
             switch (field.getTerrainType()) {
                 case GRASS -> grass++;
@@ -21,16 +20,15 @@ public class HalfMapValidator {
                 case MOUNTAIN -> mountain++;
             }
         }
-
         return grass >= 24 && water >= 7 && mountain >= 5;
     }
 
-    static boolean checkCastleRequirements(HalfMap halfMap) {
+    static boolean checkFortCandidateRequirements(HalfMap halfMap) {
         long count = halfMap.getFields().values().stream()
-                .filter(Field::isFortPresent)
+                .filter(Field::isFortCandidate)
                 .filter(f -> f.getTerrainType() == EGameTerrain.GRASS)
                 .count();
-        return count == 1;
+        return count == 6;
     }
 
     static boolean checkMapEdges(HalfMap halfMap) {
@@ -47,40 +45,47 @@ public class HalfMapValidator {
                 && touchesTop && touchesBottom && touchesLeft && touchesRight;
     }
 
+    // For each fort candidate, check if all non-water fields are reachable.
     static boolean checkIfIslandsPresent(HalfMap halfMap) {
-        return !floodFillAlgorithm(halfMap);
-    }
-
-    static boolean floodFillAlgorithm(HalfMap halfMap) {
-        Coordinate start = halfMap.getFields().entrySet().stream()
-                .filter(e -> e.getValue().isFortPresent())
-                .map(Map.Entry::getKey)
-                .findFirst()
-                .orElseThrow(() -> new IllegalStateException("No fort found!"));
-
-        Set<Coordinate> visited = new HashSet<>();
-        Deque<Coordinate> queue = new ArrayDeque<>();
-        queue.add(start);
-        visited.add(start);
-
-        while (!queue.isEmpty()) {
-            Coordinate current = queue.poll();
-            for (Coordinate neighbor : getNeighbors(current)) {
-                Field neighborField = halfMap.getFields().get(neighbor);
-                if (neighborField != null
-                        && neighborField.getTerrainType() != EGameTerrain.WATER
-                        && !visited.contains(neighbor)) {
-                    visited.add(neighbor);
-                    queue.add(neighbor);
-                }
+        List<Coordinate> fortCandidates = new ArrayList<>();
+        for (Map.Entry<Coordinate, Field> entry : halfMap.getFields().entrySet()) {
+            if (entry.getValue().isFortCandidate()) {
+                fortCandidates.add(entry.getKey());
             }
+        }
+
+        if (fortCandidates.isEmpty()) {
+            throw new IllegalStateException("No fort candidates found to start flood fill!");
         }
 
         long totalNonWaterFields = halfMap.getFields().values().stream()
                 .filter(f -> f.getTerrainType() != EGameTerrain.WATER)
                 .count();
 
-        return visited.size() == totalNonWaterFields;
+        for (Coordinate candidate : fortCandidates) {
+            Set<Coordinate> visited = new HashSet<>();
+            Deque<Coordinate> queue = new ArrayDeque<>();
+            queue.add(candidate);
+            visited.add(candidate);
+
+            while (!queue.isEmpty()) {
+                Coordinate current = queue.poll();
+                for (Coordinate neighbor : getNeighbors(current)) {
+                    Field neighborField = halfMap.getFields().get(neighbor);
+                    if (neighborField != null
+                            && neighborField.getTerrainType() != EGameTerrain.WATER
+                            && !visited.contains(neighbor)) {
+                        visited.add(neighbor);
+                        queue.add(neighbor);
+                    }
+                }
+            }
+            
+            if (visited.size() != totalNonWaterFields) {
+                return true; // islands exist for this candidate
+            }
+        }
+        return false; // no islands for any candidate (the map is valid)
     }
 
     private static List<Coordinate> getNeighbors(Coordinate c) {
