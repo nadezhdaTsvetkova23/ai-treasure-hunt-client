@@ -16,9 +16,7 @@ public class TargetSearcher {
 
     public Optional<Coordinate> getVisibleTreasure(Set<Coordinate> discovered) {
         for (Coordinate coord : discovered) {
-            Field field = fields.get(coord);
-
-            if (field != null && field.isTreasurePresent() && isFieldVisible(coord, discovered)) {
+            if (isTreasureVisibleAt(coord, discovered)) {
                 return Optional.of(coord);
             }
         }
@@ -27,29 +25,35 @@ public class TargetSearcher {
 
     public List<Coordinate> searchForExplorationTargets(Set<Coordinate> discovered) {
         List<Coordinate> targets = new ArrayList<>();
-
         for (Map.Entry<Coordinate, Field> entry : fields.entrySet()) {
-            Coordinate coord = entry.getKey();
-            Field field = entry.getValue();
-
-            if (field.getTerrainType() != null
-                    && field.getTerrainType().isWalkable()
-                    && !discovered.contains(coord)) {
-                targets.add(coord);
+            if (shouldExploreField(entry.getKey(), entry.getValue(), discovered)) {
+                targets.add(entry.getKey());
             }
         }
-
         return targets;
+    }
+
+    private boolean shouldExploreField(Coordinate coord, Field field, Set<Coordinate> discovered) {
+        return field != null
+                && field.getTerrainType() != null
+                && field.getTerrainType().isWalkable()
+                && !discovered.contains(coord);
+    }
+
+    private boolean isTreasureVisibleAt(Coordinate coord, Set<Coordinate> discovered) {
+        Field field = fields.get(coord);
+        if (field == null || !field.isTreasurePresent()) return false;
+        return isFieldVisible(coord, discovered);
     }
 
     private boolean isFieldVisible(Coordinate coord, Set<Coordinate> discovered) {
         Field field = fields.get(coord);
         if (field == null) return false;
+        if (field.getTerrainType() != EGameTerrain.MOUNTAIN) return true;
+        return isMountainAdjacentToNonMountain(coord, discovered);
+    }
 
-        if (field.getTerrainType() != EGameTerrain.MOUNTAIN) {
-            return true;
-        }
-
+    private boolean isMountainAdjacentToNonMountain(Coordinate coord, Set<Coordinate> discovered) {
         for (Coordinate neighbor : coord.getAdjacentCoordinates()) {
             Field neighborField = fields.get(neighbor);
             if (neighborField != null
@@ -58,7 +62,6 @@ public class TargetSearcher {
                 return true;
             }
         }
-
         return false;
     }
 }

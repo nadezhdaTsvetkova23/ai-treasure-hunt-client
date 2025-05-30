@@ -12,10 +12,8 @@ import java.util.*;
 
 public class GameController {
     private static final long MAX_DURATION_MILLIS = 10 * 60 * 1000;
-
     private final ClientCommunicator communicator;
     private final Visualisator visualisator;
-    private GameTracker gameTracker;
     private DiscoveryTracker tracker;
 
     public GameController(ClientCommunicator communicator, Visualisator visualisator) {
@@ -26,28 +24,14 @@ public class GameController {
     public void coordinateGame() throws InterruptedException {
         UniquePlayerIdentifier playerId = communicator.registerPlayer();
         System.out.println("✅ Player registered: " + playerId.getUniquePlayerID());
-
         waitForSecondPlayer();
-
         HalfMap validMap = generateAndSendValidMap();
         if (validMap == null) return;
-
         tracker = new DiscoveryTracker();
-
         long startTime = System.currentTimeMillis();
         runTreasureHunt(startTime);
-
-        GameState postTreasureState = communicator.requestFullGameState();
-        Optional<PlayerState> self = postTreasureState.getPlayers().stream()
-                .filter(p -> p.getUniquePlayerID().equals(communicator.getPlayerID()))
-                .findFirst();
-
-        if (self.isPresent() && self.get().hasCollectedTreasure()) {
-            System.out.println("Treasure has been collected — starting fort hunt...");
-            runFortHunt(startTime);
-        } else {
-            System.out.println("Treasure NOT confirmed — skipping fort hunt.");
-        }
+        if (hasCollectedTreasure()) runFortHunt(startTime);
+        else System.out.println("Treasure NOT confirmed — skipping fort hunt.");
     }
 
     private void waitForSecondPlayer() throws InterruptedException {
@@ -82,44 +66,15 @@ public class GameController {
             ClientFullMap fullMap = communicator.receiveFullMap();
             Coordinate current = communicator.getCurrentServerPosition();
             Map<Coordinate, Field> myFields = fullMap.getMyFields();
-
-            TargetSearcher searcher = new TargetSearcher(myFields);
-            PathGenerator pathGen = new PathGenerator(myFields);
-            MoveCalculator moveCalc = new MoveCalculator(myFields);
-
-            Map<Coordinate, Field> discovered = new HashMap<>();
-            Map<Coordinate, Field> undiscovered = new HashMap<>();
-            for (Map.Entry<Coordinate, Field> entry : myFields.entrySet()) {
-                if (tracker.isDiscovered(entry.getKey())) {
-                    discovered.put(entry.getKey(), entry.getValue());
-                } else {
-                    undiscovered.put(entry.getKey(), entry.getValue());
-                }
-            }
-
-            visualisator.displayDiscoveredFields(discovered);
-            visualisator.displayUndiscoveredFields(undiscovered);
-
-            Optional<Coordinate> visibleTreasure = searcher.getVisibleTreasure(new HashSet<>(tracker.getDiscoveredFields()));
-            Coordinate target = visibleTreasure.orElseGet(() ->
-                    chooseNextExplorationTarget(current, tracker, searcher, pathGen, myFields));
+            displayDiscoveredAndUndiscovered(myFields);
+            Optional<Coordinate> visibleTreasure = new TargetSearcher(myFields).getVisibleTreasure(new HashSet<>(tracker.getDiscoveredFields()));
+            Coordinate target = visibleTreasure.orElseGet(() -> chooseNextExplorationTarget(current, myFields));
             if (target == null) return;
-
             visualisator.displayFullMap(fullMap, current, target);
-
-            if (!executeMoves(current, pathGen, moveCalc, target, myFields, true, searcher)) {
-                return;
-            }
-
-            GameState gameState = communicator.requestFullGameState();
-            Optional<PlayerState> me = gameState.getPlayers().stream()
-                    .filter(p -> p.getUniquePlayerID().equals(communicator.getPlayerID()))
-                    .findFirst();
-
-            if (me.isPresent() && me.get().hasCollectedTreasure()) {
-                for (Coordinate coord : myFields.keySet()) {
-                    tracker.discoverField(coord);
-                }
+            if (!executeMoves(current, myFields, target, true)) return;
+            if (hasCollectedTreasure()) {
+                System.out.println("🏆 All fields marked as discovered after treasure collection.");
+                myFields.keySet().forEach(tracker::discoverField);
                 return;
             }
         }
@@ -128,90 +83,85 @@ public class GameController {
 
     private void runFortHunt(long startTime) throws InterruptedException {
         System.out.println("Starting enemy fort search...");
-
         while (System.currentTimeMillis() - startTime < MAX_DURATION_MILLIS) {
             ClientFullMap fullMap = communicator.receiveFullMap();
             Coordinate current = communicator.getCurrentServerPosition();
             Map<Coordinate, Field> allFields = fullMap.getAllFields();
-
-            TargetSearcher searcher = new TargetSearcher(allFields);
-            PathGenerator pathGen = new PathGenerator(allFields);
-            MoveCalculator moveCalc = new MoveCalculator(allFields);
-
-            Map<Coordinate, Field> discovered = new HashMap<>();
-            Map<Coordinate, Field> undiscovered = new HashMap<>();
-            for (Map.Entry<Coordinate, Field> entry : allFields.entrySet()) {
-                if (tracker.isDiscovered(entry.getKey())) {
-                    discovered.put(entry.getKey(), entry.getValue());
-                } else {
-                    undiscovered.put(entry.getKey(), entry.getValue());
-                }
-            }
-
-            visualisator.displayDiscoveredFields(discovered);
-            visualisator.displayUndiscoveredFields(undiscovered);
-
-            GameState gameState = communicator.requestFullGameState();
-            Optional<PlayerState> me = gameState.getPlayers().stream()
-                    .filter(p -> p.getUniquePlayerID().equals(communicator.getPlayerID()))
-                    .findFirst();
-
-            if (me.isPresent()) {
-                EGameState state = EGameState.fromNetwork(me.get().getState());
-                if (state == EGameState.WON) {
-                    System.out.println("🎉 Fort captured.");
-                    return;
-                } else if (state == EGameState.LOST) {
-                    System.out.println("Game lost.");
-                    return;
-                }
-            }
-
-            Coordinate target = chooseNextExplorationTarget(current, tracker, searcher, pathGen, allFields);
+            displayDiscoveredAndUndiscovered(allFields);
+            if (checkGameOver()) return;
+            Coordinate target = chooseNextExplorationTarget(current, allFields);
             if (target == null) {
                 System.out.println("No reachable target.");
                 return;
             }
-
             visualisator.displayFullMap(fullMap, current, target);
-
-            if (!executeMoves(current, pathGen, moveCalc, target, allFields, false, searcher)) {
-                return;
-            }
+            if (!executeMoves(current, allFields, target, false)) return;
         }
         System.out.println("Timeout exceeded during fort hunt.");
     }
 
-    private Coordinate chooseNextExplorationTarget(Coordinate current, DiscoveryTracker tracker,
-                                                   TargetSearcher searcher, PathGenerator pathGen,
-                                                   Map<Coordinate, Field> availableFields) {
+    private void displayDiscoveredAndUndiscovered(Map<Coordinate, Field> fields) {
+        Map<Coordinate, Field> discovered = new HashMap<>(), undiscovered = new HashMap<>();
+        for (Map.Entry<Coordinate, Field> entry : fields.entrySet()) {
+            if (tracker.isDiscovered(entry.getKey())) discovered.put(entry.getKey(), entry.getValue());
+            else undiscovered.put(entry.getKey(), entry.getValue());
+        }
+        visualisator.displayDiscoveredFields(discovered);
+        visualisator.displayUndiscoveredFields(undiscovered);
+    }
+
+    private boolean hasCollectedTreasure() {
+        GameState state = communicator.requestFullGameState();
+        return state.getPlayers().stream()
+                .filter(p -> p.getUniquePlayerID().equals(communicator.getPlayerID()))
+                .findFirst()
+                .map(PlayerState::hasCollectedTreasure)
+                .orElse(false);
+    }
+
+    private boolean checkGameOver() {
+        GameState gameState = communicator.requestFullGameState();
+        Optional<PlayerState> me = gameState.getPlayers().stream()
+                .filter(p -> p.getUniquePlayerID().equals(communicator.getPlayerID()))
+                .findFirst();
+        if (me.isPresent()) {
+            EGameState state = EGameState.fromNetwork(me.get().getState());
+            if (state == EGameState.WON) {
+                System.out.println("🎉 Fort captured."); return true;
+            }
+            if (state == EGameState.LOST) {
+                System.out.println("Game lost."); return true;
+            }
+        }
+        return false;
+    }
+
+    private Coordinate chooseNextExplorationTarget(Coordinate current, Map<Coordinate, Field> fields) {
         Set<Coordinate> discovered = new HashSet<>(tracker.getDiscoveredFields());
         Coordinate bestTarget = null;
         int shortest = Integer.MAX_VALUE;
-
-        for (Coordinate coord : availableFields.keySet()) {
-            if (!discovered.contains(coord) && availableFields.get(coord).getTerrainType().isWalkable()) {
+        PathGenerator pathGen = new PathGenerator(fields);
+        for (Coordinate coord : fields.keySet()) {
+            if (!discovered.contains(coord) && fields.get(coord).getTerrainType().isWalkable()) {
                 List<Coordinate> path = pathGen.findPathWithDijkstra(current, coord);
                 if (!path.isEmpty() && path.size() < shortest) {
-                    shortest = path.size();
-                    bestTarget = coord;
+                    shortest = path.size(); bestTarget = coord;
                 }
             }
         }
-
         if (bestTarget == null) System.out.println("No more unexplored reachable targets.");
         return bestTarget;
     }
 
-    private boolean executeMoves(Coordinate current,
-                                 PathGenerator pathGen,
-                                 MoveCalculator moveCalc,
-                                 Coordinate target,
-                                 Map<Coordinate, Field> fieldMap,
-                                 boolean checkTreasure,
-                                 TargetSearcher searcher) throws InterruptedException {
+    /**
+     * Executes moves and logs the treasure state after every move.
+     * Also logs when the treasure is collected, including position.
+     */
+    private boolean executeMoves(Coordinate current, Map<Coordinate, Field> fieldMap, Coordinate target, boolean checkTreasure) throws InterruptedException {
+        PathGenerator pathGen = new PathGenerator(fieldMap);
+        MoveCalculator moveCalc = new MoveCalculator(fieldMap);
         List<Coordinate> path = pathGen.findPathWithDijkstra(current, target);
-        List<EClientMove> moves = moveCalc.findSequenceOfMovements(path, fieldMap);
+        List<EClientMove> moves = moveCalc.findSequenceOfMovements(path);
 
         for (EClientMove move : moves) {
             EGameState state = communicator.waitUntilMustAct();
@@ -221,25 +171,25 @@ public class GameController {
             current = communicator.receiveFullMap().findMyPlayerPosition().orElse(current);
             tracker.discoverField(current);
 
-            Field field = fieldMap.get(current);
-            System.out.println("Checking PlayerState at " + current + ": terrain=" + field.getTerrainType());
-
-            GameState gameState = communicator.requestFullGameState();
-            Optional<PlayerState> me = gameState.getPlayers().stream()
-                    .filter(p -> p.getUniquePlayerID().equals(communicator.getPlayerID()))
-                    .findFirst();
-
-            if (me.isPresent()) {
-                boolean hasTreasure = me.get().hasCollectedTreasure();
-                System.out.println("hasCollectedTreasure = " + hasTreasure);
-                if (checkTreasure && hasTreasure) {
-                    for (Coordinate coord : fieldMap.keySet()) {
-                        tracker.discoverField(coord);
-                    }
+            if (checkTreasure) {
+                logTreasureState(current);
+                if (hasCollectedTreasure()) {
+                    handleTreasureCollected(fieldMap, current);
                     return false;
                 }
             }
         }
         return true;
+    }
+
+    private void logTreasureState(Coordinate current) {
+        boolean hasTreasure = hasCollectedTreasure();
+        System.out.println("Checked treasure state at " + current + ": hasCollectedTreasure = " + hasTreasure);
+    }
+
+    private void handleTreasureCollected(Map<Coordinate, Field> fieldMap, Coordinate current) {
+        System.out.println("🎉 Treasure collected at: " + current);
+        fieldMap.keySet().forEach(tracker::discoverField);
+        System.out.println("🏆 All fields marked as discovered after treasure collection.");
     }
 }

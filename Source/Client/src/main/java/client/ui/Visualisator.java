@@ -9,44 +9,51 @@ import java.util.Map;
 
 public class Visualisator {
 
-    public void displayFullMap(ClientFullMap map, Coordinate playerPosition, Coordinate enemyPosition) {
+	public void displayFullMap(ClientFullMap map, Coordinate playerPosition, Coordinate enemyPosition) {
         int width = map.getWidth();
         int height = map.getHeight();
         Map<Coordinate, Field> allFields = map.getAllFields();
 
         System.out.println("\nMap (" + width + "x" + height + "):");
+        displayHeader(width);
+        for (int y = 0; y < height; y++) {
+            displayRowLabel(y);
+            for (int x = 0; x < width; x++) {
+                Coordinate coord = new Coordinate(x, y);
+                Field field = allFields.get(coord);
+                String symbol = getFieldSymbol(field, coord, playerPosition, enemyPosition);
+                System.out.printf("   %s", symbol);
+            }
+            System.out.println();
+        }
+        displayLegend();
+    }
 
-        // header row
+    private void displayHeader(int width) {
         System.out.print("    ");
         for (int x = 0; x < width; x++) {
             System.out.printf("%4d", x);
         }
         System.out.println();
+    }
 
-        for (int y = 0; y < height; y++) {
-            System.out.print(String.format("%2d |", y));
-            for (int x = 0; x < width; x++) {
-                Coordinate coord = new Coordinate(x, y);
-                Field field = allFields.get(coord);
-                String symbol = "??";
+    private void displayRowLabel(int y) {
+        System.out.print(String.format("%2d |", y));
+    }
 
-                if (field != null) {
-                    symbol = switch (field.getTerrainType()) {
-                        case GRASS -> "G";
-                        case MOUNTAIN -> "M";
-                        case WATER -> "W";
-                    };
+    private String getFieldSymbol(Field field, Coordinate coord, Coordinate player, Coordinate enemy) {
+        if (field == null) return "??";
+        if (coord.equals(player)) return "P";
+        if (coord.equals(enemy)) return "E";
+        if (field.isFortPresent()) return "C";
+        return switch (field.getTerrainType()) {
+            case GRASS -> "G";
+            case MOUNTAIN -> "M";
+            case WATER -> "W";
+        };
+    }
 
-                    if (field.isFortPresent()) symbol = "C";
-                    if (coord.equals(playerPosition)) symbol = "P";
-                    else if (coord.equals(enemyPosition)) symbol = "E";
-                }
-
-                System.out.printf("   %s", symbol);
-            }
-            System.out.println();
-        }
-
+    private void displayLegend() {
         System.out.println("\nLegend: G = Grass, M = Mountain, W = Water, C = Castle, P = Player, E = Enemy");
     }
 
