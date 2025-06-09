@@ -3,6 +3,7 @@ package client.ui;
 import client.gamedata.GameInfo;
 import client.map.ClientFullMap;
 import client.map.Coordinate;
+import client.map.EFortPresence;
 import client.map.EGameTerrain;
 import client.map.Field;
 
@@ -19,13 +20,13 @@ public class SwingMapVisualisator {
 
     private SwingGameInfoVisualisator infoPanel;
     private GameInfo gameInfo;
-
-    private Coordinate treasureCoordinate = null;
+    private Coordinate treasureLocation = null;
+    private Coordinate enemyFortLocation = null;
 
     public SwingMapVisualisator(int width, int height, GameInfo gameInfoModel) {
         this.width = width;
         this.height = height;
-        this.gameInfo = gameInfo;
+        this.gameInfo = gameInfoModel;
 
         frame = new JFrame("Game Map Visualisation");
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
@@ -71,7 +72,6 @@ public class SwingMapVisualisator {
             }
         }
 
-        // Info Panel
         infoPanel = new SwingGameInfoVisualisator(gameInfoModel);
         infoPanel.setBorder(BorderFactory.createTitledBorder("Game Info"));
 
@@ -85,6 +85,14 @@ public class SwingMapVisualisator {
         frame.setVisible(true);
     }
 
+    public void setTreasureLocation(Coordinate coord) {
+        this.treasureLocation = coord;
+    }
+
+    public void setEnemyFortLocation(Coordinate coord) {
+        this.enemyFortLocation = coord;
+    }
+
     public void updateMap(
             ClientFullMap map,
             Set<Coordinate> discovered,
@@ -93,11 +101,12 @@ public class SwingMapVisualisator {
     ) {
         Map<Coordinate, Field> allFields = map.getAllFields();
 
-        if (treasureCoordinate == null) {
+        // Remember the treasure location permanently (first time seen)
+        if (treasureLocation == null) {
             for (Coordinate coord : discovered) {
                 Field field = allFields.get(coord);
                 if (field != null && field.isTreasurePresent()) {
-                    treasureCoordinate = coord;
+                    treasureLocation = coord;
                     break;
                 }
             }
@@ -109,39 +118,46 @@ public class SwingMapVisualisator {
                 JLabel cell = cellLabels[y][x];
                 Field field = allFields.get(coord);
 
+                // Priority: Both players, player, enemy, treasure field, forts, terrain
                 if (coord.equals(myPos) && coord.equals(enemyPos)) {
                     cell.setText("⚔️");
-                } else if (coord.equals(myPos) && treasureCoordinate != null && coord.equals(treasureCoordinate)) {
-                    cell.setText("💰");
+                    cell.setBackground(new Color(255, 220, 180));
                 } else if (coord.equals(myPos)) {
                     cell.setText("🧑");
                 } else if (coord.equals(enemyPos)) {
                     cell.setText("😈");
-                } else if (coord.equals(treasureCoordinate)) {
-                    cell.setText("💰");
-                } else if (discovered.contains(coord) && field != null && field.isFortPresent()) {
-                    cell.setText("🏰");
+                } else if (treasureLocation != null && coord.equals(treasureLocation)) {
+                    cell.setText("🟡");
+                    cell.setBackground(new Color(255, 250, 170)); 
+                } else if (field != null && field.isFortPresent()) {
+                    if (field.getFortPresence() == EFortPresence.MY_FORT) {
+                        cell.setText("🏰");
+                        cell.setBackground(new Color(210, 255, 210)); 
+                    } else if (field.getFortPresence() == EFortPresence.ENEMY_FORT) {
+                        cell.setText("🏯");
+                        cell.setBackground(new Color(255, 210, 210)); 
+                    } else {
+                        cell.setText("🏰");
+                        cell.setBackground(Color.LIGHT_GRAY);
+                    }
                 } else if (field != null) {
                     cell.setText(getTerrainEmoji(field.getTerrainType(), discovered.contains(coord)));
+                    cell.setBackground(getDefaultTerrainColor(field.getTerrainType(), discovered.contains(coord)));
                 } else {
                     cell.setText(" ");
-                }
-
-                // Background color by terrain
-                if (field == null) {
                     cell.setBackground(Color.WHITE);
-                } else if (field.getTerrainType() == EGameTerrain.WATER) {
-                    cell.setBackground(new Color(135, 180, 250));
-                } else if (field.getTerrainType() == EGameTerrain.GRASS) {
-                    cell.setBackground(discovered.contains(coord)
-                            ? new Color(170, 255, 170)
-                            : new Color(110, 200, 110));
-                } else if (field.getTerrainType() == EGameTerrain.MOUNTAIN) {
-                    cell.setBackground(new Color(200, 170, 110));
                 }
             }
         }
         frame.repaint();
+    }
+
+    private Color getDefaultTerrainColor(EGameTerrain terrain, boolean discovered) {
+        if (terrain == EGameTerrain.WATER) return new Color(135, 180, 250);
+        if (terrain == EGameTerrain.GRASS)
+            return discovered ? new Color(170, 255, 170) : new Color(110, 200, 110);
+        if (terrain == EGameTerrain.MOUNTAIN) return new Color(200, 170, 110);
+        return Color.WHITE;
     }
 
     private String getTerrainEmoji(EGameTerrain terrain, boolean discovered) {

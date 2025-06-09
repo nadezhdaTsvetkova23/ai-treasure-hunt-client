@@ -24,6 +24,17 @@ public class Coordinate {
         neighbors.add(new Coordinate(xCord, yCord + 1));
         return neighbors;
     }
+    
+    public List<Coordinate> getAllSurroundingCoordinates() {
+        List<Coordinate> neighbors = new ArrayList<>();
+        for (int dx = -1; dx <= 1; dx++) {
+            for (int dy = -1; dy <= 1; dy++) {
+                if (dx == 0 && dy == 0) continue;
+                neighbors.add(new Coordinate(xCord + dx, yCord + dy));
+            }
+        }
+        return neighbors;
+    }
 
     @Override
     public boolean equals(Object obj) {

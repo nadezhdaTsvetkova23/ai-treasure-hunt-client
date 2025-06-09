@@ -19,12 +19,13 @@ public class GameController {
     private final PlayerPositionTracker playerPositionTracker;
     private final TechnicalInfo technicalInfo;
     private final GameInfo gameInfo;
-    private final MapVisualisator mapVisualisator; // CLI view
-    private SwingMapVisualisator swingMapVisualisator = null; // GUI view, initialized only if GUI is enabled
-
+    private final MapVisualisator mapVisualisator;
+    private SwingMapVisualisator swingMapVisualisator = null;
     private final boolean guiEnabled;
     private int turnNumber = 1;
-    private Coordinate treasureCoordinate = null;
+
+    private Coordinate treasureLocation = null;
+    private Coordinate enemyFortLocation = null;
 
     public GameController(
             ClientCommunicator communicator,
@@ -100,14 +101,41 @@ public class GameController {
         while (System.currentTimeMillis() - startTime < MAX_DURATION_MILLIS) {
             ClientFullMap fullMap = communicator.receiveFullMap();
 
-            // CLI View always
-            mapVisualisator.updateMap(fullMap, Set.copyOf(discoveryTracker.getDiscoveredFields()));
+            Coordinate current = communicator.getCurrentServerPosition();
+            playerPositionTracker.setMyPlayerPosition(current);
+            playerPositionTracker.findEnemyPosition(fullMap)
+                    .ifPresent(playerPositionTracker::setEnemyPlayerPosition);
 
-            // GUI (only if enabled)
-            if (guiEnabled && swingMapVisualisator == null) {
-                swingMapVisualisator = new SwingMapVisualisator(fullMap.getWidth(), fullMap.getHeight(), gameInfo);
+            Map<Coordinate, Field> myFields = fullMap.getMyFields();
+            Map<Coordinate, Field> allFields = fullMap.getAllFields();
+
+            discoveryTracker.discoverField(current);
+
+            Field currentField = allFields.get(current);
+            if (currentField != null && currentField.getTerrainType() == EGameTerrain.MOUNTAIN) {
+                for (Coordinate neighbor : current.getAllSurroundingCoordinates()) {
+                    if (allFields.containsKey(neighbor)) {
+                        discoveryTracker.discoverField(neighbor);
+                    }
+                }
             }
+            
+         // Track treasure and enemy fort location (first time it's seen)
+            for (Coordinate c : discoveryTracker.getDiscoveredFields()) {
+                Field f = allFields.get(c);
+                if (f != null && f.isFortPresent() && !f.isMyFort() && enemyFortLocation == null) {
+                    enemyFortLocation = c;
+                }
+                if (f != null && f.isTreasurePresent() && treasureLocation == null) {
+                    treasureLocation = c;
+                }
+            }
+
+            mapVisualisator.updateMap(fullMap, Set.copyOf(discoveryTracker.getDiscoveredFields()), treasureLocation);
             if (guiEnabled) {
+                if (swingMapVisualisator == null)
+                    swingMapVisualisator = new SwingMapVisualisator(fullMap.getWidth(), fullMap.getHeight(), gameInfo);
+                swingMapVisualisator.setTreasureLocation(treasureLocation);
                 swingMapVisualisator.updateMap(
                         fullMap,
                         Set.copyOf(discoveryTracker.getDiscoveredFields()),
@@ -116,25 +144,11 @@ public class GameController {
                 );
             }
 
-            Coordinate current = communicator.getCurrentServerPosition();
-            playerPositionTracker.setMyPlayerPosition(current);
-            playerPositionTracker.findEnemyPosition(fullMap)
-                    .ifPresent(playerPositionTracker::setEnemyPlayerPosition);
-
-            // Remember the treasure's field the moment it's discovered
-            Map<Coordinate, Field> myFields = fullMap.getMyFields();
-            for (Coordinate c : discoveryTracker.getDiscoveredFields()) {
-                Field f = myFields.get(c);
-                if (f != null && f.isTreasurePresent()) treasureCoordinate = c;
-            }
-
-            discoveryTracker.discoverField(current);
-
             gameInfo.setPhase("Treasure Hunt");
             gameInfo.setTurn(turnNumber);
             gameInfo.setMyPosition(String.valueOf(playerPositionTracker.getMyPlayerPosition()));
             gameInfo.setEnemyPosition(String.valueOf(playerPositionTracker.getEnemyPlayerPosition()));
-            gameInfo.setTreasureFound(treasureCoordinate != null ? treasureCoordinate.toString() : "");
+            gameInfo.setTreasureFound(treasureLocation != null ? treasureLocation.toString() : "");
             gameInfo.setMove("");
             gameInfo.setStatus("");
             printGameInfoToCLI();
@@ -147,12 +161,6 @@ public class GameController {
             if (target == null) return;
 
             if (!executeMoves(current, myFields, target, true)) return;
-            if (hasCollectedTreasure()) {
-                myFields.keySet().forEach(discoveryTracker::discoverField);
-                gameInfo.setStatus("🎉 Treasure collected at: " + current);
-                printGameInfoToCLI();
-                return;
-            }
         }
         technicalInfo.addError("Timeout exceeded during treasure hunt.");
         gameInfo.setStatus("Timeout exceeded during treasure hunt.");
@@ -164,14 +172,38 @@ public class GameController {
         while (System.currentTimeMillis() - startTime < MAX_DURATION_MILLIS) {
             ClientFullMap fullMap = communicator.receiveFullMap();
 
-            // CLI View always
-            mapVisualisator.updateMap(fullMap, Set.copyOf(discoveryTracker.getDiscoveredFields()));
+            Coordinate current = communicator.getCurrentServerPosition();
+            playerPositionTracker.setMyPlayerPosition(current);
+            playerPositionTracker.findEnemyPosition(fullMap)
+                    .ifPresent(playerPositionTracker::setEnemyPlayerPosition);
 
-            // GUI (only if enabled)
-            if (guiEnabled && swingMapVisualisator == null) {
-                swingMapVisualisator = new SwingMapVisualisator(fullMap.getWidth(), fullMap.getHeight(), gameInfo);
+            Map<Coordinate, Field> allFields = fullMap.getAllFields();
+            Map<Coordinate, Field> enemyFields = fullMap.getEnemyFields();
+
+            discoveryTracker.discoverField(current);
+
+            Field currentField = allFields.get(current);
+            if (currentField != null && currentField.getTerrainType() == EGameTerrain.MOUNTAIN) {
+                for (Coordinate neighbor : current.getAllSurroundingCoordinates()) {
+                    if (allFields.containsKey(neighbor)) {
+                        discoveryTracker.discoverField(neighbor);
+                    }
+                }
             }
+            
+         // Track enemy fort location (first time it's seen)
+            for (Coordinate c : discoveryTracker.getDiscoveredFields()) {
+                Field f = allFields.get(c);
+                if (f != null && f.isFortPresent() && !f.isMyFort() && enemyFortLocation == null) {
+                    enemyFortLocation = c;
+                }
+            }
+
+            mapVisualisator.updateMap(fullMap, Set.copyOf(discoveryTracker.getDiscoveredFields()), treasureLocation);
             if (guiEnabled) {
+                if (swingMapVisualisator == null)
+                    swingMapVisualisator = new SwingMapVisualisator(fullMap.getWidth(), fullMap.getHeight(), gameInfo);
+                swingMapVisualisator.setTreasureLocation(treasureLocation);
                 swingMapVisualisator.updateMap(
                         fullMap,
                         Set.copyOf(discoveryTracker.getDiscoveredFields()),
@@ -180,28 +212,25 @@ public class GameController {
                 );
             }
 
-            Coordinate current = communicator.getCurrentServerPosition();
-            playerPositionTracker.setMyPlayerPosition(current);
-            playerPositionTracker.findEnemyPosition(fullMap)
-                    .ifPresent(playerPositionTracker::setEnemyPlayerPosition);
-
-            discoveryTracker.discoverField(current);
-
             gameInfo.setPhase("Fort Hunt");
             gameInfo.setTurn(turnNumber);
             gameInfo.setMyPosition(String.valueOf(playerPositionTracker.getMyPlayerPosition()));
             gameInfo.setEnemyPosition(String.valueOf(playerPositionTracker.getEnemyPlayerPosition()));
-            gameInfo.setTreasureFound(treasureCoordinate != null ? treasureCoordinate.toString() : "");
+            gameInfo.setTreasureFound(treasureLocation != null ? treasureLocation.toString() : "");
             gameInfo.setMove("");
             gameInfo.setStatus("");
             printGameInfoToCLI();
 
             turnNumber++;
 
-            Map<Coordinate, Field> allFields = fullMap.getAllFields();
-
             if (checkGameOver()) return;
-            Coordinate target = chooseNextExplorationTarget(current, allFields);
+            Coordinate target;
+            if (enemyFortLocation != null) {
+                target = enemyFortLocation;
+            } else {
+                target = chooseNextExplorationTarget(current, allFields);
+            }
+
             if (target == null) {
                 technicalInfo.addError("No reachable target during fort hunt.");
                 gameInfo.setStatus("No reachable target during fort hunt.");
@@ -219,14 +248,20 @@ public class GameController {
     private Coordinate chooseNextExplorationTarget(Coordinate current, Map<Coordinate, Field> fields) {
         Set<Coordinate> discovered = new HashSet<>(discoveryTracker.getDiscoveredFields());
         Coordinate bestTarget = null;
-        int shortest = Integer.MAX_VALUE;
+        int bestScore = Integer.MAX_VALUE;
         PathGenerator pathGen = new PathGenerator(fields);
+
         for (Coordinate coord : fields.keySet()) {
             if (!discovered.contains(coord) && fields.get(coord).getTerrainType().isWalkable()) {
                 List<Coordinate> path = pathGen.findPathWithDijkstra(current, coord);
-                if (!path.isEmpty() && path.size() < shortest) {
-                    shortest = path.size();
-                    bestTarget = coord;
+                if (!path.isEmpty()) {
+                    int infoGain = TargetSearcher.countUnexploredNeighbors(coord, fields, discovered);
+                    // Prioritize targets with higher info gain (reveals more fields)
+                    int score = path.size() - (infoGain * 2); // Tweak multiplier as desired
+                    if (score < bestScore) {
+                        bestScore = score;
+                        bestTarget = coord;
+                    }
                 }
             }
         }
@@ -235,6 +270,17 @@ public class GameController {
             printGameInfoToCLI();
         }
         return bestTarget;
+    }
+    
+    private void discoverMountainNeighbors(Coordinate current, Map<Coordinate, Field> allFields) {
+        Field currentField = allFields.get(current);
+        if (currentField != null && currentField.getTerrainType() == EGameTerrain.MOUNTAIN) {
+            for (Coordinate neighbor : current.getAllSurroundingCoordinates()) {
+                if (allFields.containsKey(neighbor)) {
+                    discoveryTracker.discoverField(neighbor);
+                }
+            }
+        }
     }
 
     private boolean executeMoves(Coordinate current, Map<Coordinate, Field> fieldMap, Coordinate target, boolean checkTreasure) throws InterruptedException {
@@ -249,21 +295,39 @@ public class GameController {
             if (state == EGameState.WON || state == EGameState.LOST) return false;
 
             communicator.sendMove(move.toServerEnum(), current, fieldMap);
-            current = communicator.receiveFullMap().findMyPlayerPosition().orElse(current);
+
+            ClientFullMap updatedMap = communicator.receiveFullMap();
+            current = updatedMap.findMyPlayerPosition().orElse(current);
+            Map<Coordinate, Field> allFields = updatedMap.getAllFields();
+
+            discoverMountainNeighbors(current, allFields); 
+
             playerPositionTracker.setMyPlayerPosition(current);
-            playerPositionTracker.findEnemyPosition(communicator.receiveFullMap())
+            playerPositionTracker.findEnemyPosition(updatedMap)
                     .ifPresent(playerPositionTracker::setEnemyPlayerPosition);
             discoveryTracker.discoverField(current);
 
             gameInfo.setMove(move.toString());
             gameInfo.setMyPosition(String.valueOf(playerPositionTracker.getMyPlayerPosition()));
             gameInfo.setEnemyPosition(String.valueOf(playerPositionTracker.getEnemyPlayerPosition()));
-            gameInfo.setTreasureFound(treasureCoordinate != null ? treasureCoordinate.toString() : "");
-            gameInfo.setStatus(""); // Clear old status for this turn
+            gameInfo.setTreasureFound(treasureLocation != null ? treasureLocation.toString() : "");
+            gameInfo.setStatus("");
             printGameInfoToCLI();
+
+            if (guiEnabled && swingMapVisualisator != null) {
+                swingMapVisualisator.setTreasureLocation(treasureLocation);
+                swingMapVisualisator.updateMap(
+                    communicator.receiveFullMap(),
+                    Set.copyOf(discoveryTracker.getDiscoveredFields()),
+                    playerPositionTracker.getMyPlayerPosition(),
+                    playerPositionTracker.getEnemyPlayerPosition()
+                );
+            }
 
             if (checkTreasure) {
                 if (hasCollectedTreasure()) {
+                    // Mark all own fields as discovered
+                    fieldMap.keySet().forEach(discoveryTracker::discoverField);
                     handleTreasureCollected(fieldMap, current);
                     gameInfo.setStatus("🎉 Treasure collected at: " + current);
                     printGameInfoToCLI();
@@ -273,6 +337,7 @@ public class GameController {
         }
         return true;
     }
+
 
     private boolean hasCollectedTreasure() {
         GameState state = communicator.requestFullGameState();
@@ -306,7 +371,7 @@ public class GameController {
     }
 
     private void handleTreasureCollected(Map<Coordinate, Field> fieldMap, Coordinate current) {
-        treasureCoordinate = current; // Remember where the treasure was found
+    	treasureLocation = current; // Remember where the treasure was found
         gameInfo.setTreasureFound(current.toString());
         gameInfo.setStatus("🎉 Treasure collected at: " + current);
     }
@@ -322,7 +387,6 @@ public class GameController {
         printGameInfoToCLI();
     }
 
-    //print game info to CLI 
     private void printGameInfoToCLI() {
         System.out.println(
             "Phase: " + gameInfo.getPhase() + "\n"
@@ -336,6 +400,6 @@ public class GameController {
     }
 
     public Coordinate getTreasureCoordinate() {
-        return treasureCoordinate;
+        return treasureLocation;
     }
 }

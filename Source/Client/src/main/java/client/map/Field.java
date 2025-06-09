@@ -58,6 +58,14 @@ public class Field {
         return isFortCandidate;
     }
 
+    public boolean isMyFort() {
+        return fortPresence == EFortPresence.MY_FORT;
+    }
+
+	public boolean isEnemyFort() {
+		return fortPresence == EFortPresence.ENEMY_FORT;
+	}
+	
     @Override
     public String toString() {
         StringBuilder sb = new StringBuilder();

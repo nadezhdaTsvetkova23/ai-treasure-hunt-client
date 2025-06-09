@@ -64,4 +64,33 @@ public class TargetSearcher {
         }
         return false;
     }
+    
+    public List<Coordinate> searchForUnexploredGrassFields(Set<Coordinate> discovered) {
+        List<Coordinate> targets = new ArrayList<>();
+        for (Map.Entry<Coordinate, Field> entry : fields.entrySet()) {
+            Coordinate coord = entry.getKey();
+            Field field = entry.getValue();
+            if (field != null
+                && field.getTerrainType() == EGameTerrain.GRASS
+                && !discovered.contains(coord)) {
+                targets.add(coord);
+            }
+        }
+        return targets;
+    }
+
+    public static int countUnexploredNeighbors(Coordinate coord, Map<Coordinate, Field> fields, Set<Coordinate> discovered) {
+        int count = 0;
+        for (Coordinate neighbor : coord.getAllSurroundingCoordinates()) {
+            Field neighborField = fields.get(neighbor);
+            if (neighborField != null
+                    && neighborField.getTerrainType() != null
+                    && neighborField.getTerrainType().isWalkable()
+                    && !discovered.contains(neighbor)) {
+                count++;
+            }
+        }
+        return count;
+    }
+
 }

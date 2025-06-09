@@ -4,6 +4,7 @@ import client.gamedata.DiscoveryTracker;
 import client.gamedata.PlayerPositionTracker;
 import client.map.ClientFullMap;
 import client.map.Coordinate;
+import client.map.EFortPresence;
 import client.map.EGameTerrain;
 import client.map.Field;
 
@@ -13,12 +14,12 @@ import java.util.Map;
 import java.util.Set;
 import java.util.List;
 
-//TODO: Remove this class if SwingMapVisualisator fully replaces CLI view.
 public class MapVisualisator implements PropertyChangeListener {
     private ClientFullMap lastMap;
     private Coordinate playerPosition;
     private Coordinate enemyPosition;
     private Set<Coordinate> discovered;
+    private Coordinate treasureLocation;
 
     public MapVisualisator(DiscoveryTracker discoveryTracker, PlayerPositionTracker positionTracker) {
         discoveryTracker.addPropertyChangeListener(this);
@@ -26,9 +27,10 @@ public class MapVisualisator implements PropertyChangeListener {
         this.discovered = Set.of();
     }
 
-    public void updateMap(ClientFullMap map, Set<Coordinate> discoveredFields) {
+    public void updateMap(ClientFullMap map, Set<Coordinate> discoveredFields, Coordinate treasureLocation) {
         this.lastMap = map;
         this.discovered = discoveredFields;
+        this.treasureLocation = treasureLocation;
         displayFullMap();
     }
 
@@ -84,7 +86,7 @@ public class MapVisualisator implements PropertyChangeListener {
 
     private int getCellWidth(int width) {
         int maxDigits = String.valueOf(width - 1).length();
-        return Math.max(4, maxDigits + 2); // 4 is safe for emoji+padding
+        return Math.max(4, maxDigits + 2);
     }
 
     private void displayHeader(int width, int cellWidth) {
@@ -99,30 +101,32 @@ public class MapVisualisator implements PropertyChangeListener {
         System.out.printf("%2d |", y);
     }
 
-    // Pad each symbol to fit cell
     private String padSymbol(String symbol, int cellWidth) {
         return String.format(" %-2s ", symbol);
     }
 
     private String getFieldSymbol(Field field, Coordinate coord, Coordinate player, Coordinate enemy, boolean isDiscovered) {
         if (field == null) return "??";
-        
+        if (treasureLocation != null && coord.equals(treasureLocation)) return "🟡";
         if (coord.equals(player) && coord.equals(enemy)) return "⚔️️";
         if (coord.equals(player)) return "🧑";
         if (coord.equals(enemy)) return "😈";
-        // Show fort/treasure ONLY if discovered
-        if (isDiscovered && field.isFortPresent()) return "🏰";
-        if (isDiscovered && field.isTreasurePresent()) return "💰";
+        if (field.isFortPresent()) {
+            if (field.getFortPresence() == EFortPresence.MY_FORT) return "🏰";
+            if (field.getFortPresence() == EFortPresence.ENEMY_FORT) return "🏯";
+            return "🏰";
+        }
+        if (isDiscovered && field.isTreasurePresent()) return "🟡";
 
         return switch (field.getTerrainType()) {
-            case GRASS -> isDiscovered ? "🟢" : "🟩";      
-            case MOUNTAIN -> isDiscovered ? "🟤" : "🟫️";  
-            case WATER -> "🟦";                           
+            case GRASS -> isDiscovered ? "🟢" : "🟩";
+            case MOUNTAIN -> isDiscovered ? "🟤" : "🟫️";
+            case WATER -> "🟦";
         };
     }
 
     private void displayLegend() {
-        System.out.println("\nLegend: 🟩 = Grass, 🟢 = Discovered Grass, 🟫️ = Mountain, 🟤 = Discovered Mountain, 🟦 = Water, 🏰 = Castle, 🧑 = Player, 😈 = Enemy, ⚔️ = Both players, 💰 = Treasure");
+        System.out.println("\nLegend: 🟩 = Grass, 🟢 = Discovered Grass, 🟫️ = Mountain, 🟤 = Discovered Mountain, 🟦 = Water, 🏰 = My Castle, 🏯 = Enemy Castle, 🧑 = Player, 😈 = Enemy, ⚔️ = Both players, 🟡 = Treasure");
     }
 
     private void printDebugFields(Map<Coordinate, Field> allFields) {
@@ -140,7 +144,7 @@ public class MapVisualisator implements PropertyChangeListener {
         }
         System.out.println();
     }
-    
+
     public void displayCurrentMove(Coordinate from, Coordinate to, EGameTerrain terrain) {
         System.out.printf("Moved from %s to %s – Terrain: %s%n", from, to, terrain);
     }

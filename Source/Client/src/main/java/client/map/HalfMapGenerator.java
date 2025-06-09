@@ -4,44 +4,88 @@ import java.util.*;
 
 public class HalfMapGenerator {
 
+    private static final Random RAND = new Random();
+
     public static HalfMap generateRandomMap() {
-        Random rand = new Random();
         while (true) {
-            Map<Coordinate, Field> fields = assignTerrains(rand);
+            Map<Coordinate, Field> fields = assignTerrainsWithSmartEdges();
             List<Coordinate> grassCoords = getCoordsByTerrain(fields, EGameTerrain.GRASS);
 
-            if (grassCoords.size() < GameMapRules.FORT_CANDIDATES) continue;
-            Set<Coordinate> fortCandidates = pickFortCandidates(grassCoords, rand);
+            List<Coordinate> goodFortCandidates = filterWellConnected(grassCoords, fields);
+            if (goodFortCandidates.size() < GameMapRules.FORT_CANDIDATES) continue;
+            Set<Coordinate> fortCandidates = pickFortCandidates(goodFortCandidates, RAND);
+
             markFortCandidates(fields, fortCandidates);
-            placeTreasure(fields, grassCoords, rand);
+
+            List<Coordinate> treasureSpots = filterWellConnected(grassCoords, fields);
 
             HalfMap map = new HalfMap(fields);
             if (HalfMapValidator.validateHalfMap(map)) return map;
         }
     }
 
-    private static Map<Coordinate, Field> assignTerrains(Random rand) {
+    private static Map<Coordinate, Field> assignTerrainsWithSmartEdges() {
         List<Coordinate> coords = generateCoordinates();
-        Collections.shuffle(coords, rand);
+        Collections.shuffle(coords, RAND);
+
         Map<Coordinate, Field> fields = new HashMap<>();
 
-        assignTerrain(fields, coords, EGameTerrain.MOUNTAIN, GameMapRules.MIN_MOUNTAIN_FIELDS, false);
-        assignTerrain(fields, coords, EGameTerrain.WATER, GameMapRules.MIN_WATER_FIELDS, false);
-        assignTerrain(fields, coords, EGameTerrain.GRASS, GameMapRules.TOTAL_FIELDS
-                - GameMapRules.MIN_MOUNTAIN_FIELDS - GameMapRules.MIN_WATER_FIELDS, false);
+        for (Coordinate c : coords) {
+            if (isEdge(c)) {
+                EGameTerrain edgeTerrain = (RAND.nextDouble() < 0.7) ? EGameTerrain.GRASS : EGameTerrain.MOUNTAIN;
+                fields.put(c, new Field(c, edgeTerrain, EFortPresence.NO_FORT, ETreasurePresence.NO_TREASURE, EPlayerPresence.NO_PLAYER, false));
+            }
+        }
 
+        int waterToPlace = GameMapRules.MIN_WATER_FIELDS;
+        List<Coordinate> shuffledNonEdge = new ArrayList<>(coords);
+        Collections.shuffle(shuffledNonEdge, RAND);
+        for (Coordinate c : shuffledNonEdge) {
+            if (fields.containsKey(c) || waterToPlace == 0) continue;
+            if (canPlaceWater(c, fields)) {
+                fields.put(c, new Field(c, EGameTerrain.WATER, EFortPresence.NO_FORT, ETreasurePresence.NO_TREASURE, EPlayerPresence.NO_PLAYER, false));
+                waterToPlace--;
+            }
+        }
+
+        int mountainToPlace = GameMapRules.MIN_MOUNTAIN_FIELDS;
+        for (Coordinate c : coords) {
+            if (!fields.containsKey(c)) {
+                if (mountainToPlace > 0 && RAND.nextDouble() < 0.3) {
+                    fields.put(c, new Field(c, EGameTerrain.MOUNTAIN, EFortPresence.NO_FORT, ETreasurePresence.NO_TREASURE, EPlayerPresence.NO_PLAYER, false));
+                    mountainToPlace--;
+                } else {
+                    fields.put(c, new Field(c, EGameTerrain.GRASS, EFortPresence.NO_FORT, ETreasurePresence.NO_TREASURE, EPlayerPresence.NO_PLAYER, false));
+                }
+            }
+        }
         return fields;
     }
 
-    private static void assignTerrain(Map<Coordinate, Field> fields, List<Coordinate> coords, EGameTerrain terrain, int count, boolean isFort) {
-        int added = 0, i = 0;
-        while (added < count && i < coords.size()) {
-            Coordinate c = coords.get(i++);
-            if (!fields.containsKey(c)) {
-                fields.put(c, new Field(c, terrain, EFortPresence.NO_FORT, ETreasurePresence.NO_TREASURE, EPlayerPresence.NO_PLAYER, isFort));
-                added++;
-            }
+    private static boolean canPlaceWater(Coordinate c, Map<Coordinate, Field> fields) {
+        int consecutive = 0;
+        for (Coordinate neighbor : c.getAdjacentCoordinates()) {
+            Field f = fields.get(neighbor);
+            if (f != null && f.getTerrainType() == EGameTerrain.WATER) consecutive++;
         }
+        return consecutive < 2;
+    }
+
+    private static boolean isEdge(Coordinate c) {
+        return c.getX() == 0 || c.getY() == 0 || c.getX() == GameMapRules.MAP_WIDTH - 1 || c.getY() == GameMapRules.MAP_HEIGHT - 1;
+    }
+
+    private static List<Coordinate> filterWellConnected(List<Coordinate> candidates, Map<Coordinate, Field> fields) {
+        List<Coordinate> result = new ArrayList<>();
+        for (Coordinate c : candidates) {
+            int walkableNeighbors = 0;
+            for (Coordinate n : c.getAdjacentCoordinates()) {
+                Field neighbor = fields.get(n);
+                if (neighbor != null && neighbor.getTerrainType().isWalkable()) walkableNeighbors++;
+            }
+            if (walkableNeighbors >= 2) result.add(c);
+        }
+        return result;
     }
 
     private static List<Coordinate> generateCoordinates() {
@@ -72,11 +116,4 @@ public class HalfMapGenerator {
         }
     }
 
-    private static void placeTreasure(Map<Coordinate, Field> fields, List<Coordinate> grassCoords, Random rand) {
-        Collections.shuffle(grassCoords, rand);
-        Coordinate treasure = grassCoords.get(0);
-        Field old = fields.get(treasure);
-        fields.put(treasure, new Field(treasure, old.getTerrainType(), old.getFortPresence(),
-                ETreasurePresence.TREASURE_PRESENT, old.getPlayerPresence(), old.isFortCandidate()));
-    }
 }
