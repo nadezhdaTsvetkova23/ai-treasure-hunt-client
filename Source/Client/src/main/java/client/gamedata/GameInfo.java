@@ -66,4 +66,17 @@ public class GameInfo {
         String old = this.status; this.status = status;
         changes.firePropertyChange("status", old, status);
     }
+    
+
+    public void printGameInfoCLI() {
+        System.out.println(
+            "Phase: " + getPhase() + "\n"
+            + "Turn: " + getTurn() + "\n"
+            + "Move: " + getMove() + "\n"
+            + "My position: " + getMyPosition() + "\n"
+            + "Enemy position: " + getEnemyPosition() + "\n"
+            + "Treasure found on position: " + getTreasureFound() + "\n"
+            + (getStatus() != null && !getStatus().isEmpty() ? ("Status: " + getStatus()) : "")
+        );
+    }
 }

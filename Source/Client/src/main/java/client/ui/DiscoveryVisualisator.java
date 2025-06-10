@@ -4,7 +4,12 @@ import client.gamedata.DiscoveryTracker;
 import client.map.Coordinate;
 import java.util.List;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 public class DiscoveryVisualisator {
+	private static final Logger log = LoggerFactory.getLogger(DiscoveryVisualisator.class);
+
     public DiscoveryVisualisator(DiscoveryTracker model) {
         model.addPropertyChangeListener(evt -> {
             if ("discoveredFields".equals(evt.getPropertyName())) {
@@ -16,10 +21,10 @@ public class DiscoveryVisualisator {
     }
 
     private void displayDiscoveredFields(List<Coordinate> discovered) {
-        System.out.print("[Discovered] Fields: ");
+        StringBuilder sb = new StringBuilder("[Discovered] Fields: ");
         for (Coordinate coord : discovered) {
-            System.out.print(coord + " ");
+            sb.append(coord).append(" ");
         }
-        System.out.println();
+        log.debug(sb.toString());
     }
 }

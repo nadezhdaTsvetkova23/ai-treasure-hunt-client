@@ -2,6 +2,8 @@ package client.networking;
 
 import java.util.Map;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -29,6 +31,8 @@ import messagesbase.messagesfromserver.PlayerState;
 import reactor.core.publisher.Mono;
 
 public class ClientCommunicator {
+	private static final Logger log = LoggerFactory.getLogger(ClientCommunicator.class);
+
 	private final String gameID;
 	private final String url;
 	private String playerID;
@@ -53,112 +57,134 @@ public class ClientCommunicator {
 	            .defaultHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_XML_VALUE)
 	            .defaultHeader(HttpHeaders.ACCEPT, MediaType.APPLICATION_XML_VALUE)
 	            .build();
+	    log.info("ClientCommunicator initialized with GameID={}", gameID);
 	}
 
 	public UniquePlayerIdentifier registerPlayer() {
-	    PlayerRegistration registration = new PlayerRegistration(firstName, lastName, uaccount);
+        try {
+            PlayerRegistration registration = new PlayerRegistration(firstName, lastName, uaccount);
+            Mono<ResponseEnvelope<UniquePlayerIdentifier>> responseMono = baseWebClient
+                    .method(HttpMethod.POST)
+                    .uri("/" + gameID + "/players")
+                    .body(BodyInserters.fromValue(registration))
+                    .retrieve()
+                    .bodyToMono(new ParameterizedTypeReference<ResponseEnvelope<UniquePlayerIdentifier>>() {});
+            ResponseEnvelope<UniquePlayerIdentifier> response = responseMono.block();
 
-	    Mono<ResponseEnvelope<UniquePlayerIdentifier>> responseMono = baseWebClient
-	            .method(HttpMethod.POST)
-	            .uri("/" + gameID + "/players")
-	            .body(BodyInserters.fromValue(registration))
-	            .retrieve()
-	            .bodyToMono(new ParameterizedTypeReference<ResponseEnvelope<UniquePlayerIdentifier>>() {});
+            if (response.getState() == ERequestState.Error) {
+                log.error("Registration failed: {}", response.getExceptionMessage());
+                throw new RuntimeException("Registration failed: " + response.getExceptionMessage());
+            }
 
-	    ResponseEnvelope<UniquePlayerIdentifier> response = responseMono.block();
-
-	    if (response.getState() == ERequestState.Error) {
-	        throw new RuntimeException("!Registration failed: " + response.getExceptionMessage());
-	    }
-
-	    this.playerID = response.getData().get().getUniquePlayerID(); // store it for reuse
-	    return response.getData().get();
-	}
+            this.playerID = response.getData().get().getUniquePlayerID();
+            log.info("Player successfully registered.");
+            return response.getData().get();
+        } catch (Exception e) {
+            log.error("Exception during player registration", e);
+            throw new RuntimeException("Player registration failed.", e);
+        }
+    }
 	
 	public void sendHalfMap(HalfMap halfMap) {
-	    if (playerID == null) {
-	        throw new IllegalStateException("Player must be registered before sending half map.");
-	    }
+        if (playerID == null) throw new IllegalStateException("Register before sending half map.");
+        if (!HalfMapValidator.validateHalfMap(halfMap)) {
+            log.warn("HalfMap validation failed.");
+            throw new IllegalArgumentException("HalfMap invalid.");
+        }
 
-	    if (!HalfMapValidator.validateHalfMap(halfMap)) {
-	        throw new IllegalArgumentException("❌ HalfMap validation failed. Map will not be sent to the server.");
-	    }
+        try {
+            PlayerHalfMap networkMap = MapConverter.convertToNetworkMap(halfMap, new UniquePlayerIdentifier(playerID));
+            Mono<ResponseEnvelope<Void>> responseMono = baseWebClient
+                    .method(HttpMethod.POST)
+                    .uri("/" + gameID + "/halfmaps")
+                    .body(BodyInserters.fromValue(networkMap))
+                    .retrieve()
+                    .bodyToMono(new ParameterizedTypeReference<ResponseEnvelope<Void>>() {});
+            ResponseEnvelope<Void> response = responseMono.block();
 
-	    PlayerHalfMap networkMap = MapConverter.convertToNetworkMap(halfMap, new UniquePlayerIdentifier(playerID));
+            if (response.getState() == ERequestState.Error) {
+                log.error("HalfMap send failed: {}", response.getExceptionMessage());
+                throw new RuntimeException("HalfMap send failed: " + response.getExceptionMessage());
+            }
 
-	    Mono<ResponseEnvelope<Void>> responseMono = baseWebClient
-	            .method(HttpMethod.POST)
-	            .uri("/" + gameID + "/halfmaps")
-	            .body(BodyInserters.fromValue(networkMap))
-	            .retrieve()
-	            .bodyToMono(new ParameterizedTypeReference<ResponseEnvelope<Void>>() {});
-
-	    ResponseEnvelope<Void> response = responseMono.block();
-
-	    if (response.getState() == ERequestState.Error) {
-	        throw new RuntimeException("❌ HalfMap sending failed: " + response.getExceptionMessage());
-	    }
-
-	    System.out.println("✅ HalfMap sent successfully!");
-	}
+            log.info("HalfMap sent.");
+        } catch (Exception e) {
+            log.error("Exception while sending HalfMap", e);
+            throw new RuntimeException("Error sending HalfMap", e);
+        }
+    }
 
 	public EGameState requestGameState() {
-	    waitIfTooEarly();
+        waitIfTooEarly();
 
-	    Mono<ResponseEnvelope<GameState>> responseMono = baseWebClient
-	            .method(HttpMethod.GET)
-	            .uri("/" + gameID + "/states/" + playerID)
-	            .retrieve()
-	            .bodyToMono(new ParameterizedTypeReference<ResponseEnvelope<GameState>>() {});
+        try {
+            Mono<ResponseEnvelope<GameState>> responseMono = baseWebClient
+                    .method(HttpMethod.GET)
+                    .uri("/" + gameID + "/states/" + playerID)
+                    .retrieve()
+                    .bodyToMono(new ParameterizedTypeReference<ResponseEnvelope<GameState>>() {});
+            ResponseEnvelope<GameState> response = responseMono.block();
+            lastGameStateRequestTime = System.currentTimeMillis();
 
-	    ResponseEnvelope<GameState> response = responseMono.block();
-	    lastGameStateRequestTime = System.currentTimeMillis();
+            if (response.getState() == ERequestState.Error) {
+                log.error("Game state fetch failed: {}", response.getExceptionMessage());
+                throw new RuntimeException("Game state error.");
+            }
 
-	    if (response.getState() == ERequestState.Error) {
-	        throw new RuntimeException("Failed to get game state: " + response.getExceptionMessage());
-	    }
+            GameState gameState = response.getData().orElseThrow(() -> new RuntimeException("Game state is empty."));
+            for (PlayerState player : gameState.getPlayers()) {
+                if (player.getUniquePlayerID().equals(this.playerID)) {
+                    return EGameState.fromNetwork(player.getState());
+                }
+            }
 
-	    GameState gameState = response.getData().orElseThrow(() ->
-	        new RuntimeException("No GameState returned.")
-	    );
-
-	    for (PlayerState player : gameState.getPlayers()) {
-	        if (player.getUniquePlayerID().equals(this.playerID)) {
-	            return EGameState.fromNetwork(player.getState());
-	        }
-	    }
-	    throw new RuntimeException("Could not find own player in game state.");
-	}
-
+            log.error("Player ID not found in game state.");
+            throw new RuntimeException("Player ID not found.");
+        } catch (Exception e) {
+            log.error("Exception while requesting game state", e);
+            throw new RuntimeException("Error requesting game state", e);
+        }
+    }
 	
 	public GameState requestFullGameState() {
-	    waitIfTooEarly();
+        waitIfTooEarly();
 
-	    Mono<ResponseEnvelope<GameState>> webAccess = baseWebClient
-	            .method(HttpMethod.GET)
-	            .uri("/" + gameID + "/states/" + playerID)
-	            .retrieve()
-	            .bodyToMono(new ParameterizedTypeReference<ResponseEnvelope<GameState>>() {});
+        try {
+            Mono<ResponseEnvelope<GameState>> webAccess = baseWebClient
+                    .method(HttpMethod.GET)
+                    .uri("/" + gameID + "/states/" + playerID)
+                    .retrieve()
+                    .bodyToMono(new ParameterizedTypeReference<ResponseEnvelope<GameState>>() {});
+            ResponseEnvelope<GameState> response = webAccess.block();
+            lastGameStateRequestTime = System.currentTimeMillis();
 
-	    ResponseEnvelope<GameState> response = webAccess.block();
-	    lastGameStateRequestTime = System.currentTimeMillis(); 
+            if (response.getState() == ERequestState.Error) {
+                log.error("Full game state error: {}", response.getExceptionMessage());
+                throw new RuntimeException("Full game state error.");
+            }
 
-	    if (response.getState() == ERequestState.Error) {
-	        throw new RuntimeException("Failed to retrieve full game state: " + response.getExceptionMessage());
-	    }
-
-	    return response.getData().orElseThrow(() ->
-	            new RuntimeException("GameState data missing in server response."));
-	}
-
+            return response.getData().orElseThrow(() ->
+                    new RuntimeException("Missing GameState data."));
+        } catch (Exception e) {
+            log.error("Exception while requesting full game state", e);
+            throw new RuntimeException("Error requesting full game state", e);
+        }
+    }
 	
 	public ClientFullMap receiveFullMap() {
-	    GameState gameState = requestFullGameState();
-	    return MapConverter.convertToInternalMap(
-	        gameState.getMap(),
-	        new UniquePlayerIdentifier(playerID)
-	    );
-	}
+        try {
+            GameState gameState = requestFullGameState();
+            ClientFullMap map = MapConverter.convertToInternalMap(
+                    gameState.getMap(),
+                    new UniquePlayerIdentifier(playerID)
+            );
+            log.info("Full map successfully received and converted.");
+            return map;
+        } catch (Exception e) {
+            log.error("Exception while receiving full map", e);
+            throw new RuntimeException("Error receiving full map", e);
+        }
+    }
 	
 	public String getPlayerID() {
 	    if (playerID == null) {
@@ -168,65 +194,67 @@ public class ClientCommunicator {
 	}
 
 	public void sendMove(EMove move, Coordinate currentPosition, Map<Coordinate, Field> fields) {
-	    Coordinate next = switch (move) {
-	        case Up -> new Coordinate(currentPosition.getX(), currentPosition.getY() - 1);
-	        case Down -> new Coordinate(currentPosition.getX(), currentPosition.getY() + 1);
-	        case Left -> new Coordinate(currentPosition.getX() - 1, currentPosition.getY());
-	        case Right -> new Coordinate(currentPosition.getX() + 1, currentPosition.getY());
-	    };
+        Coordinate next = switch (move) {
+            case Up -> new Coordinate(currentPosition.getX(), currentPosition.getY() - 1);
+            case Down -> new Coordinate(currentPosition.getX(), currentPosition.getY() + 1);
+            case Left -> new Coordinate(currentPosition.getX() - 1, currentPosition.getY());
+            case Right -> new Coordinate(currentPosition.getX() + 1, currentPosition.getY());
+        };
 
-	    Field targetField = fields.get(next);
-	    if (targetField == null || targetField.getTerrainType() == EGameTerrain.WATER) {
-	        throw new RuntimeException("Attempted to move into a WATER or unknown field at " + next);
-	    }
+        Field target = fields.get(next);
+        if (target == null || target.getTerrainType() == EGameTerrain.WATER) {
+            log.warn("Invalid move attempt into {}", next);
+            throw new RuntimeException("Invalid move.");
+        }
 
-	    try {
-	        Thread.sleep(50); // tiny delay to respect server processing time before sending move
-	    } catch (InterruptedException e) {
-	        Thread.currentThread().interrupt();
-	    }
-	    
-	    Mono<ResponseEnvelope<Void>> responseMono = baseWebClient
-	        .method(HttpMethod.POST)
-	        .uri("/" + gameID + "/moves")
-	        .body(BodyInserters.fromValue(PlayerMove.of(playerID, move)))
-	        .retrieve()
-	        .bodyToMono(new ParameterizedTypeReference<ResponseEnvelope<Void>>() {});
+        try {
+            Thread.sleep(50);
+            Mono<ResponseEnvelope<Void>> responseMono = baseWebClient
+                    .method(HttpMethod.POST)
+                    .uri("/" + gameID + "/moves")
+                    .body(BodyInserters.fromValue(PlayerMove.of(playerID, move)))
+                    .retrieve()
+                    .bodyToMono(new ParameterizedTypeReference<ResponseEnvelope<Void>>() {});
+            ResponseEnvelope<Void> response = responseMono.block();
 
-	    ResponseEnvelope<Void> response = responseMono.block();
+            if (response.getState() == ERequestState.Error) {
+                log.error("Move failed: {}", response.getExceptionMessage());
+                throw new RuntimeException("Move error.");
+            }
 
-	    if (response.getState() == ERequestState.Error) {
-	        throw new RuntimeException("Move sending failed: " + response.getExceptionMessage());
-	    }
-
-	    System.out.println("Move " + move + " to " + next + " sent successfully.");
-	}
-
-
+            log.info("Move {} → {} sent.", move, next);
+        } catch (Exception e) {
+            log.error("Exception while sending move", e);
+            throw new RuntimeException("Error sending move", e);
+        }
+    }
 	
 	public EGameState waitUntilMustAct() throws InterruptedException {
 	    while (true) {
 	        Thread.sleep(400);  // min wait
 	        EGameState state = requestGameState();
-	        System.out.println("Current GameState: " + state);
-
 	        if (state == EGameState.MUST_ACT) {
-	            System.out.println("It's your turn!");
+	        	log.info("Client may act.");
 	            return state;
 	        } else if (state == EGameState.WON || state == EGameState.LOST) {
-	            System.out.println("Game over: " + state);
+	        	log.info("Game over: {}", state);
 	            return state;
 	        }
 	    }
 	}
 	
 	public Coordinate getCurrentServerPosition() {
+		try {
 	    GameState gameState = requestFullGameState();
 	    return gameState.getMap().getMapNodes().stream()
 	        .filter(node -> node.getPlayerPositionState().representsMyPlayer())
 	        .findFirst()
 	        .map(node -> new Coordinate(node.getX(), node.getY()))
 	        .orElseThrow(() -> new IllegalStateException("Could not determine player's server position."));
+		} catch (Exception e) {
+            log.error("Exception while determining server position", e);
+            throw new RuntimeException("Error locating player position", e);
+        }
 	}
 	
 	private void waitIfTooEarly() {
@@ -235,11 +263,10 @@ public class ClientCommunicator {
 	    if (waitTime > 0) {
 	        try {
 	            Thread.sleep(waitTime);
+	            log.trace("Throttling requests, waited {}ms", waitTime);
 	        } catch (InterruptedException e) {
 	            Thread.currentThread().interrupt();
 	        }
 	    }
 	}
-
-	
 }

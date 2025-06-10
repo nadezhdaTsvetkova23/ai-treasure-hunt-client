@@ -5,6 +5,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import client.map.ClientFullMap;
 import client.map.Coordinate;
 import client.map.EGameTerrain;
@@ -21,96 +24,96 @@ import messagesbase.messagesfromserver.FullMap;
 import messagesbase.messagesfromserver.FullMapNode;
 
 public class MapConverter {
+	private static final Logger log = LoggerFactory.getLogger(MapConverter.class);
 
     public static PlayerHalfMap convertToNetworkMap(HalfMap internalMap, UniquePlayerIdentifier playerId) {
         List<PlayerHalfMapNode> nodes = new ArrayList<>();
+        
+        try {
+        	for (Map.Entry<Coordinate, Field> entry : internalMap.getFields().entrySet()) {
+        		Coordinate coord = entry.getKey();
+        		Field field = entry.getValue();
 
-        for (Map.Entry<Coordinate, Field> entry : internalMap.getFields().entrySet()) {
-            Coordinate coord = entry.getKey();
-            Field field = entry.getValue();
-
-            nodes.add(new PlayerHalfMapNode(
-                    coord.getX(),
-                    coord.getY(),
-                    field.isFortCandidate(),
-                    mapToNetworkTerrain(field.getTerrainType())
-            ));
+        		nodes.add(new PlayerHalfMapNode(
+        				coord.getX(),
+        				coord.getY(),
+        				field.isFortCandidate(),
+        				mapToNetworkTerrain(field.getTerrainType())
+        				));
+        	}
+        	log.debug("HalfMap successfully converted to network format with {} nodes.", nodes.size());
+        	return new PlayerHalfMap(playerId, nodes);
+        } catch (Exception e) {
+        	log.error("Failed to convert HalfMap to network format.", e);
+        	throw new RuntimeException("HalfMap conversion failed.", e);
         }
-
-        return new PlayerHalfMap(playerId, nodes);
     }
 
     public static ClientFullMap convertToInternalMap(FullMap fullMap, UniquePlayerIdentifier myId) {
         Map<Coordinate, Field> myFields = new HashMap<>();
         Map<Coordinate, Field> enemyFields = new HashMap<>();
-
         int maxX = 0;
         int maxY = 0;
-
-        // detect player starting position
         Integer myX = null;
         Integer myY = null;
 
-        for (FullMapNode node : fullMap.getMapNodes()) {
-            if (EPlayerPresence.fromServerPlayerPosition(node.getPlayerPositionState()) == EPlayerPresence.MY_PLAYER) {
-                myX = node.getX();
-                myY = node.getY();
-                break;
-            }
-        }
-
-        // Fallback: detect own fort if player not visible yet
-        if (myX == null || myY == null) {
+        try {
             for (FullMapNode node : fullMap.getMapNodes()) {
-                if (EFortPresence.fromServerFortState(node.getFortState()) == EFortPresence.MY_FORT) {
+                if (EPlayerPresence.fromServerPlayerPosition(node.getPlayerPositionState()) == EPlayerPresence.MY_PLAYER) {
                     myX = node.getX();
                     myY = node.getY();
                     break;
                 }
             }
-        }
 
-        if (myX == null || myY == null) {
-            System.out.println("Could not detect player's half map. Defaulting to left/top half.");
-            myX = 0;
-            myY = 0;
-        }
-
-        // detect orientation
-        boolean isVerticalLayout = fullMap.getMapNodes().stream().anyMatch(n -> n.getX() > 9);
-        boolean isMyHalf;
-
-        for (FullMapNode node : fullMap.getMapNodes()) {
-            Coordinate coord = new Coordinate(node.getX(), node.getY());
-
-            EGameTerrain terrain = EGameTerrain.fromServerTerrain(node.getTerrain());
-            EFortPresence fort = EFortPresence.fromServerFortState(node.getFortState());
-            ETreasurePresence treasure = ETreasurePresence.fromServerTreasureState(node.getTreasureState());
-            EPlayerPresence presence = EPlayerPresence.fromServerPlayerPosition(node.getPlayerPositionState());
-
-            Field field = new Field(coord, terrain, fort, treasure, presence, false);
-
-            if (isVerticalLayout) {
-                // Horizontal layout - split by X axis
-                isMyHalf = myX <= 9 ? coord.getX() <= 9 : coord.getX() >= 10;
-            } else {
-                // Vertical layout - split by Y axis
-                isMyHalf = myY <= 4 ? coord.getY() <= 4 : coord.getY() >= 5;
+            if (myX == null || myY == null) {
+                for (FullMapNode node : fullMap.getMapNodes()) {
+                    if (EFortPresence.fromServerFortState(node.getFortState()) == EFortPresence.MY_FORT) {
+                        myX = node.getX();
+                        myY = node.getY();
+                        break;
+                    }
+                }
             }
 
-            if (isMyHalf) {
-                myFields.put(coord, field);
-            } else {
-                enemyFields.put(coord, field);
+            if (myX == null || myY == null) {
+                log.warn("Could not detect player start position. Defaulting to top-left.");
+                myX = 0;
+                myY = 0;
             }
 
-            maxX = Math.max(maxX, coord.getX());
-            maxY = Math.max(maxY, coord.getY());
-        }
+            //detect orientation
+            boolean isVerticalLayout = fullMap.getMapNodes().stream().anyMatch(n -> n.getX() > 9);
 
-        HalfMap myHalf = new HalfMap(myFields);
-        HalfMap enemyHalf = new HalfMap(enemyFields);
-        return new ClientFullMap(myHalf, enemyHalf, maxX + 1, maxY + 1);
+            for (FullMapNode node : fullMap.getMapNodes()) {
+                Coordinate coord = new Coordinate(node.getX(), node.getY());
+                EGameTerrain terrain = EGameTerrain.fromServerTerrain(node.getTerrain());
+                EFortPresence fort = EFortPresence.fromServerFortState(node.getFortState());
+                ETreasurePresence treasure = ETreasurePresence.fromServerTreasureState(node.getTreasureState());
+                EPlayerPresence presence = EPlayerPresence.fromServerPlayerPosition(node.getPlayerPositionState());
+
+                Field field = new Field(coord, terrain, fort, treasure, presence, false);
+
+                boolean isMyHalf = isVerticalLayout
+                        ? (myX <= 9 ? coord.getX() <= 9 : coord.getX() >= 10) // Horizontal layout - split by X axis
+                        : (myY <= 4 ? coord.getY() <= 4 : coord.getY() >= 5); // Vertical layout - split by Y axis
+
+                if (isMyHalf) {
+                    myFields.put(coord, field);
+                } else {
+                    enemyFields.put(coord, field);
+                }
+
+                maxX = Math.max(maxX, coord.getX());
+                maxY = Math.max(maxY, coord.getY());
+            }
+
+            log.debug("FullMap converted to internal map with dimensions {}x{}", maxX + 1, maxY + 1);
+            return new ClientFullMap(new HalfMap(myFields), new HalfMap(enemyFields), maxX + 1, maxY + 1);
+        } catch (Exception e) {
+            log.error("Error converting FullMap to internal map.", e);
+            throw new RuntimeException("FullMap conversion failed.", e);
+        }
     }
     
     public static Field updatePlayerPresence(Field oldField, EPlayerPresence newPresence) {

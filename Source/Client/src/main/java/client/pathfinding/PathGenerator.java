@@ -6,7 +6,11 @@ import client.map.Field;
 
 import java.util.*;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 public class PathGenerator {
+	private static final Logger log = LoggerFactory.getLogger(PathGenerator.class);
     private final Map<Coordinate, Field> fields;
 
     public PathGenerator(Map<Coordinate, Field> fields) {
@@ -14,7 +18,10 @@ public class PathGenerator {
     }
 
     public List<Coordinate> findPathWithDijkstra(Coordinate start, Coordinate target) {
-        if (!isWalkable(target)) return Collections.emptyList();
+    	if (!isWalkable(target)) {
+    	    log.warn("Target coordinate {} is not walkable. Returning empty path.", target);
+    	    return Collections.emptyList();
+    	}
 
         Map<Coordinate, Integer> dist = initializeDistances(start);
         Map<Coordinate, Coordinate> prev = new HashMap<>();
@@ -26,7 +33,10 @@ public class PathGenerator {
             if (current.equals(target)) break;
             processNeighbors(current, dist, prev, queue);
         }
-        return buildPath(prev, start, target);
+        
+        List<Coordinate> path = buildPath(prev, start, target);
+        log.debug("Path from {} to {} generated with {} steps.", start, target, path.size());
+        return path;
     }
 
     public int dijkstraDistance(Coordinate from, Coordinate to) {

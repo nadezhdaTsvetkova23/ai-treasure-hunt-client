@@ -2,25 +2,37 @@ package client.map;
 
 import java.util.*;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 public class HalfMapGenerator {
+	private static final Logger log = LoggerFactory.getLogger(HalfMapGenerator.class);
 
     private static final Random RAND = new Random();
 
     public static HalfMap generateRandomMap() {
         while (true) {
+            log.debug("Generating a new HalfMap...");
             Map<Coordinate, Field> fields = assignTerrainsWithSmartEdges();
             List<Coordinate> grassCoords = getCoordsByTerrain(fields, EGameTerrain.GRASS);
 
             List<Coordinate> goodFortCandidates = filterWellConnected(grassCoords, fields);
-            if (goodFortCandidates.size() < GameMapRules.FORT_CANDIDATES) continue;
+            if (goodFortCandidates.size() < GameMapRules.FORT_CANDIDATES) {
+                log.warn("Not enough fort candidates found ({}). Retrying...", goodFortCandidates.size());
+                continue;
+            }
             Set<Coordinate> fortCandidates = pickFortCandidates(goodFortCandidates, RAND);
+            log.debug("Selected fort candidate positions: {}", fortCandidates);
 
             markFortCandidates(fields, fortCandidates);
 
-            List<Coordinate> treasureSpots = filterWellConnected(grassCoords, fields);
-
             HalfMap map = new HalfMap(fields);
-            if (HalfMapValidator.validateHalfMap(map)) return map;
+            if (HalfMapValidator.validateHalfMap(map)) {
+                log.info("Successfully generated a valid HalfMap.");
+                return map;
+            } else {
+                log.warn("Generated map failed validation. Retrying...");
+            }
         }
     }
 

@@ -9,13 +9,19 @@ import java.beans.PropertyChangeSupport;
 import java.util.Map;
 import java.util.Optional;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 public class PlayerPositionTracker {
+	private static final Logger log = LoggerFactory.getLogger(PlayerPositionTracker.class);
+	
     private Coordinate myPlayerPosition;
     private Coordinate enemyPlayerPosition;
 
     private final PropertyChangeSupport changes = new PropertyChangeSupport(this);
 
     public void updatePositions(ClientFullMap fullMap) {
+        log.trace("Scanning full map to update positions.");
         Optional<Coordinate> myPos = findMyPosition(fullMap);
         Optional<Coordinate> enemyPos = findEnemyPosition(fullMap);
         myPos.ifPresent(this::setMyPlayerPosition);
@@ -47,6 +53,7 @@ public class PlayerPositionTracker {
     public void setMyPlayerPosition(Coordinate pos) {
         Coordinate old = this.myPlayerPosition;
         this.myPlayerPosition = pos;
+        log.debug("Updated my player position: {}", pos);
         changes.firePropertyChange("myPlayerPosition", old, pos);
     }
 
@@ -57,6 +64,7 @@ public class PlayerPositionTracker {
     public void setEnemyPlayerPosition(Coordinate pos) {
         Coordinate old = this.enemyPlayerPosition;
         this.enemyPlayerPosition = pos;
+        log.debug("Updated enemy player position: {}", pos);
         changes.firePropertyChange("enemyPlayerPosition", old, pos);
     }
 

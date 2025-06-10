@@ -2,14 +2,21 @@ package client.map;
 
 import java.util.*;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 public class HalfMapValidator {
+    private static final Logger log = LoggerFactory.getLogger(HalfMapValidator.class);
 
     public static boolean validateHalfMap(HalfMap map) {
-        return hasValidTerrainCounts(map)
+        log.info("Starting validation of HalfMap with {} fields.", map.getFields().size());
+        boolean result = hasValidTerrainCounts(map)
                 && hasValidFortCandidates(map)
                 && hasValidEdges(map)
                 && hasNoIslands(map)
                 && edgesAreWalkable(map);
+        log.info("HalfMap validation result: {}", result);
+        return result;
     }
 
     static boolean hasValidTerrainCounts(HalfMap map) {
@@ -21,6 +28,7 @@ public class HalfMapValidator {
                 case MOUNTAIN -> mountain++;
             }
         }
+        log.debug("Terrain count - Grass: {}, Water: {}, Mountain: {}", grass, water, mountain);
         return grass >= GameMapRules.MIN_GRASS_FIELDS
                 && water >= GameMapRules.MIN_WATER_FIELDS
                 && mountain >= GameMapRules.MIN_MOUNTAIN_FIELDS;
@@ -31,6 +39,7 @@ public class HalfMapValidator {
                 .filter(Field::isFortCandidate)
                 .filter(f -> f.getTerrainType() == EGameTerrain.GRASS)
                 .count();
+        log.debug("Fort candidate count (grass only): {}", count);
         return count == GameMapRules.FORT_CANDIDATES;
     }
 
@@ -39,13 +48,19 @@ public class HalfMapValidator {
         Set<Coordinate> valid5x10 = generateGrid(5, 10);
         Set<Coordinate> valid10x5 = generateGrid(10, 5);
 
+        boolean is5x10 = coords.equals(valid5x10);
+        boolean is10x5 = coords.equals(valid10x5);
+
         boolean touchesTop = coords.stream().anyMatch(c -> c.getY() == 0);
         boolean touchesBottom = coords.stream().anyMatch(c -> c.getY() == 4 || c.getY() == 9);
         boolean touchesLeft = coords.stream().anyMatch(c -> c.getX() == 0);
         boolean touchesRight = coords.stream().anyMatch(c -> c.getX() == 9 || c.getX() == 4);
 
-        return (coords.equals(valid5x10) || coords.equals(valid10x5))
-                && touchesTop && touchesBottom && touchesLeft && touchesRight;
+        log.debug("Layout check → 5x10: {}, 10x5: {}", is5x10, is10x5);
+        log.debug("Edge connectivity - Top: {}, Bottom: {}, Left: {}, Right: {}",
+                touchesTop, touchesBottom, touchesLeft, touchesRight);
+
+        return (is5x10 || is10x5) && touchesTop && touchesBottom && touchesLeft && touchesRight;
     }
 
     static boolean hasNoIslands(HalfMap map) {
@@ -58,6 +73,9 @@ public class HalfMapValidator {
 
         long totalNonWater = map.getFields().values().stream()
                 .filter(f -> f.getTerrainType() != EGameTerrain.WATER).count();
+
+        log.debug("Starting island check from {} fort candidate(s). Total non-water fields: {}",
+                candidates.size(), totalNonWater);
 
         for (Coordinate start : candidates) {
             Set<Coordinate> visited = new HashSet<>();
@@ -73,7 +91,12 @@ public class HalfMapValidator {
                         queue.add(n);
                 }
             }
-            if (visited.size() != totalNonWater) return false;
+
+            log.debug("Flood fill from {} reached {} fields.", start, visited.size());
+            if (visited.size() != totalNonWater) {
+                log.warn("Flood fill from {} failed. Found disconnected region.", start);
+                return false;
+            }
         }
         return true;
     }
@@ -85,7 +108,11 @@ public class HalfMapValidator {
             Field f = map.getFields().get(c);
             if (f != null && MapUtils.isWalkable(f)) walkable++;
         }
-        return walkable >= (int) Math.ceil(edges.size() * GameMapRules.EDGE_WALKABLE_RATIO);
+
+        int required = (int) Math.ceil(edges.size() * GameMapRules.EDGE_WALKABLE_RATIO);
+        log.debug("Walkable edges: {}/{} (required minimum: {})", walkable, edges.size(), required);
+
+        return walkable >= required;
     }
 
     private static Set<Coordinate> generateGrid(int width, int height) {

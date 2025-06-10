@@ -6,8 +6,12 @@ import client.map.Field;
 
 import java.util.*;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 public class MoveCalculator {
 
+	private static final Logger log = LoggerFactory.getLogger(MoveCalculator.class);
     private final Map<Coordinate, Field> fields;
 
     public MoveCalculator(Map<Coordinate, Field> fields) {
@@ -32,8 +36,8 @@ public class MoveCalculator {
     private boolean isMoveAllowed(Coordinate from, Coordinate to) {
         Field toField = fields.get(to);
         if (toField == null || toField.getTerrainType() == EGameTerrain.WATER) {
-        	System.out.printf("Skipping move from %s to %s: not allowed (toField=%s)%n",
-                    from, to, (toField == null ? "null" : toField.getTerrainType()));
+            log.debug("Skipping move from {} to {}: not allowed (toField={})", from, to,
+                      (toField == null ? "null" : toField.getTerrainType()));
             return false;
         }
         return true;
