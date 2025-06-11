@@ -1,5 +1,6 @@
 package client.pathfinding;
 
+import client.exception.InvalidCoordinateException;
 import client.map.Coordinate;
 import client.map.EGameTerrain;
 import client.map.Field;
@@ -35,9 +36,12 @@ public class MoveCalculator {
 
     private boolean isMoveAllowed(Coordinate from, Coordinate to) {
         Field toField = fields.get(to);
-        if (toField == null || toField.getTerrainType() == EGameTerrain.WATER) {
-            log.debug("Skipping move from {} to {}: not allowed (toField={})", from, to,
-                      (toField == null ? "null" : toField.getTerrainType()));
+        if (toField == null) {
+            log.debug("Invalid move from {} to non-existent coordinate: {}", from, to);
+            throw new InvalidCoordinateException("Move to non-existent coordinate: " + to);
+        }
+        if (toField.getTerrainType() == EGameTerrain.WATER) {
+            log.debug("Skipping move from {} to water at {}", from, to);
             return false;
         }
         return true;

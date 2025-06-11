@@ -1,5 +1,7 @@
 package client.controller;
 
+import client.exception.InvalidCoordinateException;
+import client.exception.PlayerRegistrationException;
 import client.gamedata.*;
 import client.map.*;
 import client.networking.ClientCommunicator;
@@ -81,9 +83,19 @@ public class GameController {
                 gameInfo.setStatus("Treasure NOT confirmed — skipping fort hunt.");
             }
             log.info("Game coordination finished.");
+        } catch (InvalidCoordinateException e) {
+            log.error("Invalid move attempted: {}", e.getMessage(), e);
+            technicalInfo.addError("Invalid move: " + e.getMessage());
+        } catch (PlayerRegistrationException e) {
+            log.error("Player registration failed: {}", e.getMessage(), e);
+            technicalInfo.addError("Player registration failed: " + e.getMessage());
+            gameInfo.setStatus("Player registration failed: " + e.getMessage());
+            gameInfo.printGameInfoCLI();
         } catch (Exception e) {
             log.error("Critical error during game coordination: {}", e.getMessage(), e);
             technicalInfo.addError("Critical error: " + e.getMessage());
+            gameInfo.setStatus("Critical error: " + e.getMessage());
+            gameInfo.printGameInfoCLI();
         }
     }
 

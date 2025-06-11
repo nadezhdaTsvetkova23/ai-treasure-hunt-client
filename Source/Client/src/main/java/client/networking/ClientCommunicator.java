@@ -11,6 +11,7 @@ import org.springframework.http.MediaType;
 import org.springframework.web.reactive.function.BodyInserters;
 import org.springframework.web.reactive.function.client.WebClient;
 
+import client.exception.PlayerRegistrationException;
 import client.gamedata.EGameState;
 import client.map.ClientFullMap;
 import client.map.Coordinate;
@@ -60,7 +61,7 @@ public class ClientCommunicator {
 	    log.info("ClientCommunicator initialized with GameID={}", gameID);
 	}
 
-	public UniquePlayerIdentifier registerPlayer() {
+	public UniquePlayerIdentifier registerPlayer() throws PlayerRegistrationException {
         try {
             PlayerRegistration registration = new PlayerRegistration(firstName, lastName, uaccount);
             Mono<ResponseEnvelope<UniquePlayerIdentifier>> responseMono = baseWebClient
@@ -73,7 +74,7 @@ public class ClientCommunicator {
 
             if (response.getState() == ERequestState.Error) {
                 log.error("Registration failed: {}", response.getExceptionMessage());
-                throw new RuntimeException("Registration failed: " + response.getExceptionMessage());
+                throw new PlayerRegistrationException("Registration failed: " + response.getExceptionMessage());
             }
 
             this.playerID = response.getData().get().getUniquePlayerID();
@@ -81,7 +82,7 @@ public class ClientCommunicator {
             return response.getData().get();
         } catch (Exception e) {
             log.error("Exception during player registration", e);
-            throw new RuntimeException("Player registration failed.", e);
+            throw new PlayerRegistrationException("Player registration failed.", e);
         }
     }
 	
