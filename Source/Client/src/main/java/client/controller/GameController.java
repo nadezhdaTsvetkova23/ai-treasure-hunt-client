@@ -1,3 +1,12 @@
+/**
+ * GameController - main orchestration class for the client.
+ * 
+ * NOTE: This class is currently monolithic and will be refactored in the future for better separation of concerns (handlers, visualization).
+ * All business logic is implemented directly for stability and simplicity for the project deadline.
+ *
+ * TODO: Refactor into smaller handler classes and improve testability and extensibility.
+ */
+
 package client.controller;
 
 import client.exception.InvalidCoordinateException;
@@ -28,7 +37,6 @@ public class GameController {
     private final MapVisualisator mapVisualisator;
     private SwingMapVisualisator swingMapVisualisator = null;
     private final boolean guiEnabled;
-    private int turnNumber = 1;
 
     private Coordinate treasureLocation = null;
     private Coordinate enemyFortLocation = null;
@@ -58,8 +66,8 @@ public class GameController {
             log.info("Game coordination started.");
             UniquePlayerIdentifier playerId = communicator.registerPlayer();
             log.info("Player registered successfully: {}", playerId.getUniquePlayerID());
+            gameInfo.setTurn(1);
             setGameInfo("Treasure Hunt", 1, "", "", "", "", "Player registered: " + playerId.getUniquePlayerID());
-
             waitForSecondPlayer();
 
             HalfMap validMap = generateAndSendValidMap();
@@ -139,7 +147,7 @@ public class GameController {
         gameInfo.setPhase("Treasure Hunt");
         log.info("Phase: Treasure Hunt started.");
         while (System.currentTimeMillis() - startTime < MAX_DURATION_MILLIS) {
-            try {
+        	try {
             	log.trace("Requesting new FullMap from server...");
                 ClientFullMap fullMap = communicator.receiveFullMap();
 
@@ -190,7 +198,6 @@ public class GameController {
                 }
 
                 gameInfo.setPhase("Treasure Hunt");
-                gameInfo.setTurn(turnNumber);
                 gameInfo.setMyPosition(String.valueOf(playerPositionTracker.getMyPlayerPosition()));
                 gameInfo.setEnemyPosition(String.valueOf(playerPositionTracker.getEnemyPlayerPosition()));
                 gameInfo.setTreasureFound(treasureLocation != null ? treasureLocation.toString() : "");
@@ -198,9 +205,8 @@ public class GameController {
                 gameInfo.setStatus("");
                 gameInfo.printGameInfoCLI();
 
-                log.debug("Turn {} in Treasure Hunt. Current position: {}", turnNumber, playerPositionTracker.getMyPlayerPosition());
-                turnNumber++;
-
+                log.debug("Turn {} in Treasure Hunt. Current position: {}", gameInfo.getTurn(), playerPositionTracker.getMyPlayerPosition());
+                
                 Optional<Coordinate> visibleTreasure = new TargetSearcher(myFields)
                         .getVisibleTreasure(new HashSet<>(discoveryTracker.getDiscoveredFields()));
                 Coordinate target = visibleTreasure.orElseGet(() -> chooseNextExplorationTarget(current, myFields));
@@ -272,7 +278,6 @@ public class GameController {
                 }
 
                 gameInfo.setPhase("Fort Hunt");
-                gameInfo.setTurn(turnNumber);
                 gameInfo.setMyPosition(String.valueOf(playerPositionTracker.getMyPlayerPosition()));
                 gameInfo.setEnemyPosition(String.valueOf(playerPositionTracker.getEnemyPlayerPosition()));
                 gameInfo.setTreasureFound(treasureLocation != null ? treasureLocation.toString() : "");
@@ -280,8 +285,7 @@ public class GameController {
                 gameInfo.setStatus("");
                 gameInfo.printGameInfoCLI();
 
-                log.debug("Turn {} in Fort Hunt. Current position: {}", turnNumber, playerPositionTracker.getMyPlayerPosition());
-                turnNumber++;
+                log.debug("Turn {} in Fort Hunt. Current position: {}", gameInfo.getTurn(), playerPositionTracker.getMyPlayerPosition());
 
                 if (checkGameOver()) {
                     log.info("Game over detected during Fort Hunt.");
@@ -310,6 +314,7 @@ public class GameController {
                 break;
             }
         }
+        checkGameOver();
         technicalInfo.addError("Timeout exceeded during fort hunt.");
         gameInfo.setStatus("Timeout exceeded during fort hunt.");
         log.warn("Timeout exceeded during fort hunt.");
@@ -376,7 +381,7 @@ public class GameController {
 
             log.info("Sending move {} from {} towards {}", move, current, target);
             communicator.sendMove(move.toServerEnum(), current, fieldMap);
-
+            gameInfo.setTurn(gameInfo.getTurn() + 1);
             log.trace("Requesting new FullMap from server...");
             ClientFullMap updatedMap = communicator.receiveFullMap();
             current = updatedMap.findMyPlayerPosition().orElse(current);

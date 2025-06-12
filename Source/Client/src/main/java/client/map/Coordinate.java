@@ -48,5 +48,10 @@ public class Coordinate {
     public int hashCode() {
         return Objects.hash(xCord, yCord);
     }
+    
+    @Override
+	public String toString() {
+		return String.format("(%d, %d)", xCord, yCord);
+	}
 
 }
