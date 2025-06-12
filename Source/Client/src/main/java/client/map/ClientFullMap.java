@@ -71,20 +71,5 @@ public class ClientFullMap {
     public boolean isValidHalfMapSize() {
         return myPlayerHalfMap.getFields().size() == 50 && enemyPlayerHalfMap.getFields().size() == 50;
     }
-    
-    @Override
-    public String toString() {
-        StringBuilder sb = new StringBuilder();
-        sb.append("ClientFullMap ").append(width).append("x").append(height).append("\n");
-        sb.append("--- My HalfMap ---\n");
-        myPlayerHalfMap.getFields().forEach((coord, field) ->
-            sb.append(coord).append(" → ").append(field).append("\n")
-        );
-        sb.append("--- Enemy HalfMap ---\n");
-        enemyPlayerHalfMap.getFields().forEach((coord, field) ->
-            sb.append(coord).append(" → ").append(field).append("\n")
-        );
-        return sb.toString();
-    }
 
 }

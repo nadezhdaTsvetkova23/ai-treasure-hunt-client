@@ -60,6 +60,16 @@ public class ClientCommunicator {
 	            .build();
 	    log.info("ClientCommunicator initialized with GameID={}", gameID);
 	}
+	
+	public ClientCommunicator(String url, String gameID, String firstName, String lastName, String uaccount, WebClient webClient) {
+	    this.url = url;
+	    this.gameID = gameID;
+	    this.firstName = firstName;
+	    this.lastName = lastName;
+	    this.uaccount = uaccount;
+	    this.baseWebClient = webClient; // for injecting a mock!
+	    log.info("ClientCommunicator initialized with GameID={}", gameID);
+	}
 
 	public UniquePlayerIdentifier registerPlayer() throws PlayerRegistrationException {
         try {

@@ -14,10 +14,6 @@ public class HalfMap {
         this.fields = fields;
     }
 
-    public void addField(Coordinate coordinate, Field field) {
-        fields.put(coordinate, field);
-    }
-
     public Map<Coordinate, Field> getFields() {
         return fields;
     }

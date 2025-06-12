@@ -33,20 +33,6 @@ public class DiscoveryTracker {
             changes.firePropertyChange("discoveredFields", null, new ArrayList<>(discoveredFields));
         }
     }
-    
-    public void markDiscovered(Collection<Coordinate> coords) {
-        boolean updated = false;
-        for (Coordinate coord : coords) {
-            if (!discoveredFields.contains(coord)) {
-                discoveredFields.add(coord);
-                updated = true;
-                log.trace("Marked field as discovered via bulk update: {}", coord);
-            }
-        }
-        if (updated) {
-            changes.firePropertyChange("discoveredFields", null, new ArrayList<>(discoveredFields));
-        }
-    }
 
     public boolean isDiscovered(Coordinate coord) {
         return discoveredFields.contains(coord);

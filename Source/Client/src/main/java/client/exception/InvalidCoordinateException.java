@@ -8,7 +8,4 @@ public class InvalidCoordinateException extends RuntimeException {
     	super(message); 
     }
     
-    public InvalidCoordinateException(String message, Throwable cause) { 
-    	super(message, cause); 
-    }
 }

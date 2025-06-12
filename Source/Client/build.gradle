@@ -90,6 +90,7 @@ dependencies {
     
     // To abstract dependencies based on Mockito (also for tests).
     testImplementation 'org.mockito:mockito-core:5.6.0'
+    testImplementation 'org.mockito:mockito-junit-jupiter:5.6.0'
     
     // Logging uses Logback with the SLF4J facade concept.
     implementation group: 'org.slf4j', name:'slf4j-api', version: '2.0.16'

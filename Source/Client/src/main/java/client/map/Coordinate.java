@@ -49,9 +49,4 @@ public class Coordinate {
         return Objects.hash(xCord, yCord);
     }
 
-    @Override
-    public String toString() {
-        return "(" + this.getX() + "," + this.getY() + ")";
-    }
-
 }

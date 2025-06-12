@@ -65,15 +65,4 @@ public class Field {
 	public boolean isEnemyFort() {
 		return fortPresence == EFortPresence.ENEMY_FORT;
 	}
-	
-    @Override
-    public String toString() {
-        StringBuilder sb = new StringBuilder();
-        sb.append(terrainType);
-        if (fortPresence != EFortPresence.NO_FORT) sb.append(" [Fort]");
-        if (treasurePresence == ETreasurePresence.TREASURE_PRESENT) sb.append(" [Treasure]");
-        if (playerPresence == EPlayerPresence.MY_PLAYER) sb.append(" [MyPlayer]");
-        if (playerPresence == EPlayerPresence.ENEMY_PLAYER) sb.append(" [EnemyPlayer]");
-        return sb.toString();
-    }
 }
