@@ -1,7 +1,7 @@
 # 🗺️ AI Treasure Hunt Client
 
 An autonomous Java client for a turn-based **Treasure Hunt** game, developed as part of the Software Engineering 1 course at the University of Vienna.  
-The client connects to a provided server via **HTTP/XML messages** and competes against another AI client to find the treasure and capture the opponent’s fort.  
+The client connects to a provided server via **XML-over-HTTP messages** and competes against another AI client to find the treasure and capture the opponent’s fort.  
 
 ---
 
@@ -40,7 +40,7 @@ The main objectives for the client were:
     - `map/` — Half-map generation & validation (**OCP + Notification**)
     - `networking/` — Client–server communication (HTTP + XML)
     - `pathfinding/` — Dijkstra + extensions
-    - `ui/` — Views: CLI renderer + **Swing** visualizer (MVC View)
+    - `ui/` — Views: CLI renderer + **Swing-based GUI** (MVC View)
   - `src/test/java/client/` — JUnit 5 + Mockito tests
   - `build.gradle` — Gradle build configuration
   - `settings.gradle`
@@ -49,7 +49,7 @@ The main objectives for the client were:
 ## ✨ Features
 - Half-map generation with validation (Flood-Fill reachability, terrain quotas, OCP-friendly rule checks)
 - Pathfinding with terrain costs (mountain steps), target selection, and fallback strategies
-- HTTP/XML networking (registration, map upload, moves, status polling)
+- XML-over-HTTP networking (registration, map upload, moves, status polling)
 - Two visualizations:
   - **CLI (UTF-8):** compact map + key state; always used in **TR** mode
   - **Swing GUI (optional):** colored grid and live labels (never started in TR)
@@ -99,7 +99,7 @@ java -jar build/libs/client-<version>.jar GUI <BaseServerUrl> <GameID>
 - GUI mode renders a Swing window (map + info panel).
 - Do not use GUI mode when connecting to the evaluation server; it is for local demos only.
 
-### ✅ Testing
+## ✅ Testing
 ```bash
 ./gradlew test
 ```
@@ -107,7 +107,9 @@ java -jar build/libs/client-<version>.jar GUI <BaseServerUrl> <GameID>
 - Contains data-driven tests, negative tests, and Mockito-based mock tests.
 - Coverage target: ≥ 65% (measured via IDE coverage tools in Eclipse).
 
-### Visuals
+---
+
+## Visuals
 
 **UML — Class Diagram**  
 _Overall structure of the client (MVC, networking, map, pathfinding, UI, etc.)._  
@@ -126,12 +128,14 @@ _Example of textual game output in TR mode (client-server interaction, status up
 <img width="477" height="343" alt="image" src="https://github.com/user-attachments/assets/998593e2-7af5-4a77-9c1a-ae7ce31695e3" />
 
 **GUI Representation**  
-_Game in progress: the first player has found the treasure and is moving toward the opponent’s fortress. Visualized using Swing with UTF-8 icons._  
+_Game in progress: the first player has found the treasure and is moving toward the opponent’s fortress. Visualized using a Swing-based GUI with UTF-8 icons._  
 <img width="2048" height="862" alt="image" src="https://github.com/user-attachments/assets/447cc0e6-27ce-4cef-8817-0fab0a944982" />
 
-### Learning Outcomes
+---
 
-This project gave me practical experience in building a complete software system from design to production. Key takeaways:
+## Learning Outcomes
+
+Through this project, I gained hands-on experience in designing, implementing, and refining a full software system. Key takeaways:
 
 - **Architecture & Design**  
   - Applied the **MVC pattern** for a clean separation of concerns.  
