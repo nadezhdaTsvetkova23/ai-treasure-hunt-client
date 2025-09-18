@@ -110,4 +110,5 @@ java -jar build/libs/client-<version>.jar GUI <BaseServerUrl> <GameID>
 ### Visuals
 
 <img width="1830" height="1277" alt="image" src="https://github.com/user-attachments/assets/37d5927d-cc9c-4d86-9cc9-1218540ef3f3" />
+<img width="1258" height="664" alt="image" src="https://github.com/user-attachments/assets/93f61a90-3e54-4c97-bf3b-d73fed3d2f54" />
 
