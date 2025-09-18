@@ -107,4 +107,7 @@ java -jar build/libs/client-<version>.jar GUI <BaseServerUrl> <GameID>
 - Contains data-driven tests, negative tests, and Mockito-based mock tests.
 - Coverage target: ≥ 65% (measured via IDE coverage tools in Eclipse).
 
-### Screenshots & Diagrams
+### Visuals
+
+<img width="1830" height="1277" alt="image" src="https://github.com/user-attachments/assets/37d5927d-cc9c-4d86-9cc9-1218540ef3f3" />
+
